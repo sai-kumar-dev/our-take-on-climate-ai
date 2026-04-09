@@ -21,6 +21,23 @@ The app expects these local assets to exist:
 
 Install the direct Python dependencies from `requirements.txt` in the local virtual environment.
 
+## Local Config
+
+The app now supports a project-level `.env` file.
+
+Start by copying:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Useful keys:
+- `GROQ_API_KEY` to enable the Groq layman explanation flow in the UI
+- `GROQ_MODEL` to choose the Groq model
+- `MODEL_ARTIFACT_DIR` to point at a specific trained artifact folder
+- `FEEDBACK_SIGNING_SECRET` to integrity-sign stored feedback
+- `API_BASE_URL` only if you are running the UI against a non-default API address
+
 ## Run
 
 From the project root:

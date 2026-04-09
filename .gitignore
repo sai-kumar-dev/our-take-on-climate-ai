@@ -17,3 +17,7 @@ data_new/
 data/processed/data_new_final_ml_dataset.csv
 
 *.log
+.env
+.env.local
+.env.*
+!.env.example

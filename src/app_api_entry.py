@@ -26,12 +26,14 @@ from .climate_pipeline.llm_guide import (
     LlmGuideNotConfiguredError,
     LlmGuideUpstreamError,
 )
+from .env_loader import load_project_env
 from .climate_pipeline.utils import ensure_parent_dir
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SRC_DIR = Path(__file__).resolve().parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
+load_project_env(root_dir=ROOT_DIR)
 
 DEFAULT_ARTIFACT_CANDIDATES = [
     ROOT_DIR / "artifacts" / "data_new_training",

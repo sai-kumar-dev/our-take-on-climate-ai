@@ -10,6 +10,13 @@ import pandas as pd
 import requests
 import streamlit as st
 
+try:
+    from .env_loader import load_project_env
+except ImportError:
+    from env_loader import load_project_env
+
+load_project_env()
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 PRIMARY_NUMERIC_FIELDS = [
     "temp_avg",
