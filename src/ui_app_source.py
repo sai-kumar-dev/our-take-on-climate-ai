@@ -344,6 +344,8 @@ def invalidate_stale_results(
         st.session_state.pop("last_payload", None)
         st.session_state.pop("last_llm_guide", None)
         st.session_state.pop("llm_guide_signature", None)
+        st.session_state.pop("last_layman_explanation", None)
+        st.session_state.pop("layman_explanation_signature", None)
     if previous_simulation_signature is not None and previous_simulation_signature != simulation_signature:
         st.session_state.pop("last_simulation", None)
 
@@ -472,6 +474,88 @@ def render_result_guide() -> None:
             st.write(body)
 
 
+def request_ai_guide(
+    *,
+    prediction: dict[str, Any],
+    payload: dict[str, Any],
+    preferred_language: str,
+    user_question: str,
+    region: str,
+    state: str,
+) -> tuple[dict[str, Any] | None, str | None]:
+    return post_json(
+        "/llm-guide",
+        {
+            "prediction": prediction,
+            "input_snapshot": payload,
+            "preferred_language": preferred_language,
+            "user_question": user_question,
+            "region": region,
+            "state": state,
+        },
+    )
+
+
+def render_layman_explanation(
+    prediction: dict[str, Any],
+    llm_support: dict[str, Any],
+    payload: dict[str, Any],
+    region: str,
+    state: str,
+) -> None:
+    st.subheader("Simple farmer explanation")
+    if not llm_support.get("enabled"):
+        st.info(
+            "Groq explanation is not enabled yet, so the app is showing the built-in rule explanation below."
+        )
+        st.write(prediction.get("farmer_message", prediction.get("explanation", "No explanation was returned.")))
+        return
+
+    supported_languages = llm_support.get("supported_languages", PREFERRED_LANGUAGES) or PREFERRED_LANGUAGES
+    default_language = st.session_state.get("llm_guide_language", supported_languages[0] if supported_languages else "English")
+    explanation_signature = payload_signature(
+        {
+            "prediction_request_id": prediction.get("request_id"),
+            "language": default_language,
+            "mode": "layman_explanation",
+        }
+    )
+
+    if st.button("Explain this in simple words", key="generate_layman_explanation", width="stretch"):
+        with st.spinner("Turning the result into a simpler explanation..."):
+            guide_response, error = request_ai_guide(
+                prediction=prediction,
+                payload=payload,
+                preferred_language=default_language,
+                user_question="Please explain this result in very simple farmer-friendly language with what this means, why it came first, and what to check next.",
+                region=region,
+                state=state,
+            )
+        if error:
+            st.error(f"Simple explanation failed: {error}")
+        else:
+            st.session_state["last_layman_explanation"] = guide_response
+            st.session_state["layman_explanation_signature"] = explanation_signature
+
+    guide_response = st.session_state.get("last_layman_explanation")
+    if guide_response and st.session_state.get("layman_explanation_signature") == explanation_signature:
+        st.markdown(
+            """
+            <div class="answer-shell">
+                <div class="mini-kicker">Layman explanation</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.write(guide_response.get("answer", "No explanation returned."))
+        st.caption(guide_response.get("disclaimer", ""))
+        return
+
+    st.caption(
+        "Use this when you want the result explained in plain language for a beginner or farmer."
+    )
+
+
 def render_ai_guide(
     prediction: dict[str, Any],
     llm_support: dict[str, Any],
@@ -479,7 +563,7 @@ def render_ai_guide(
     region: str,
     state: str,
 ) -> None:
-    st.subheader("Ask the AI guide")
+    st.subheader("Ask a follow-up question")
     if not llm_support.get("enabled"):
         st.info(
             "The AI guide is optional and currently turned off. Add `GROQ_API_KEY` to enable Groq answers here."
@@ -515,16 +599,13 @@ def render_ai_guide(
 
     if st.button("Ask AI guide", key="ask_ai_guide", width="stretch"):
         with st.spinner("Preparing a simpler answer from the current prediction..."):
-            guide_response, error = post_json(
-                "/llm-guide",
-                {
-                    "prediction": prediction,
-                    "input_snapshot": payload,
-                    "preferred_language": selected_language or default_language,
-                    "user_question": user_question,
-                    "region": region,
-                    "state": state,
-                },
+            guide_response, error = request_ai_guide(
+                prediction=prediction,
+                payload=payload,
+                preferred_language=selected_language or default_language,
+                user_question=user_question,
+                region=region,
+                state=state,
             )
         if error:
             st.error(f"AI guide failed: {error}")
@@ -593,7 +674,7 @@ def render_prediction(
     warnings = prediction.get("warnings", [])
     localized_context = prediction.get("localized_context", {})
     summary_tab, explain_tab, help_tab, ai_tab = st.tabs(
-        ["Result summary", "Why the app said this", "Help and glossary", "Ask AI guide"]
+        ["Result summary", "Explain simply", "Help and glossary", "Ask AI guide"]
     )
 
     with summary_tab:
@@ -665,7 +746,9 @@ def render_prediction(
                 st.warning(item)
 
     with explain_tab:
-        st.subheader("Simple explanation")
+        render_layman_explanation(prediction, llm_support, payload, region, state)
+
+        st.subheader("Model explanation")
         st.write(prediction.get("explanation", "No explanation was returned."))
 
         if top_features:

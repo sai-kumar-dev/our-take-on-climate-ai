@@ -90,8 +90,12 @@ class GroqGuideClient:
                 "You are a careful crop guidance explainer for first-time farmers. "
                 "Use only the provided prediction data. Do not claim live weather access, "
                 "do not guarantee yield or income, and do not present this as a final planting order. "
-                "Keep the answer short, practical, and beginner-friendly. If a non-English language is requested, "
-                "answer fully in that language when possible. Otherwise, use simple English."
+                "Keep the answer short, practical, and beginner-friendly. "
+                "Explain terms in layman language. Prefer three short sections with simple headings: "
+                "'What this means', 'Why it came first', and 'What to check next'. "
+                "If there are warnings, mention them in plain words. "
+                "If a non-English language is requested, answer fully in that language when possible. "
+                "Otherwise, use simple English."
             ),
             "input": prompt,
         }
@@ -209,11 +213,13 @@ def build_guide_prompt(
     if question:
         lines.append(f"User question: {question}")
         lines.append(
-            "Answer the user's question directly first, then briefly explain what to check next."
+            "Answer the user's question directly first in layman language, then briefly explain what to check next."
         )
     else:
         lines.append(
-            "Please explain this result for a beginner farmer in three short parts: what it means, why it came up, and what to check next."
+            "Please explain this result for a beginner farmer in three short parts with clear headings: "
+            "'What this means', 'Why it came first', and 'What to check next'. "
+            "Keep the wording simple enough for a first-time farmer."
         )
 
     return "\n".join(lines)
