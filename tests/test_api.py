@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -91,6 +92,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("supported_crops", payload)
         self.assertIn("feedback", payload)
         self.assertIn("temporal_context", payload)
+        self.assertIn("guidance_scope", payload)
         self.assertGreaterEqual(payload["coverage"]["crop_count"], 1)
 
     def test_context_endpoint(self) -> None:
@@ -109,6 +111,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["resolved_region"], "Pune")
         self.assertEqual(payload["target_month"], "06")
         self.assertIn("feature_defaults", payload)
+        self.assertIn("guidance_scope", payload)
 
     def test_simulate_endpoint(self) -> None:
         response = self.client.post(
@@ -176,6 +179,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("confidence_breakdown", payload)
         self.assertIn("request_id", payload)
         self.assertIn("prediction_time_ms", payload)
+        self.assertIn("guidance_scope", payload)
 
     def test_predict_endpoint_rejects_empty_payload(self) -> None:
         response = self.client.post("/predict", json={"region": "Pune", "features": {}})
@@ -256,6 +260,41 @@ class ApiTests(unittest.TestCase):
         self.assertIn("[redacted-phone]", last_record["comment"])
         self.assertIn("record_hash", last_record)
         self.assertIn("integrity_signature", last_record)
+
+    def test_create_app_is_lazy_about_default_service_loading(self) -> None:
+        feedback_store = FeedbackStore(storage_dir=self.feedback_dir / "lazy_store", signing_secret="test-secret")
+        with mock.patch("src.app_api_entry.get_service", side_effect=AssertionError("get_service should stay lazy")):
+            app = create_app(service=None, feedback_store=feedback_store)
+        self.assertIsNotNone(app)
+
+    def test_feedback_rate_limit_rejects_burst_submissions(self) -> None:
+        service = CropSuitabilityInferenceService.from_artifact_dir(self.artifact_dir, root_dir=ROOT_DIR)
+        feedback_store = FeedbackStore(storage_dir=self.feedback_dir / "rate_limit_store", signing_secret="test-secret")
+        rate_limited_client = TestClient(
+            create_app(
+                service=service,
+                feedback_store=feedback_store,
+                feedback_rate_limit_count=1,
+                feedback_rate_limit_window_seconds=3600,
+            )
+        )
+        payload = {
+            "request_id": "predict-request-123",
+            "region": "Pune",
+            "state": "Maharashtra",
+            "preferred_language": "English",
+            "selected_crop": "sugarcane",
+            "actual_crop": "sugarcane",
+            "outcome_label": "useful",
+            "helpfulness_rating": 4,
+            "clarity_rating": 4,
+            "consent_for_training": False,
+            "comment": "First submission",
+        }
+        first_response = rate_limited_client.post("/feedback", json=payload)
+        self.assertEqual(first_response.status_code, 200)
+        second_response = rate_limited_client.post("/feedback", json={**payload, "comment": "Second submission"})
+        self.assertEqual(second_response.status_code, 429)
 
 
 if __name__ == "__main__":

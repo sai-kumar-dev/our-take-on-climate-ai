@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 import logging
 import os
 import sys
@@ -7,11 +8,12 @@ from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
-from time import perf_counter
+from time import perf_counter, time
 from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .climate_pipeline.feedback import FeedbackStore
@@ -40,6 +42,8 @@ SUPPORTED_LANGUAGES = [
     "Telugu",
     "Tamil",
 ]
+DEFAULT_FEEDBACK_RATE_LIMIT_COUNT = 12
+DEFAULT_FEEDBACK_RATE_LIMIT_WINDOW_SECONDS = 900
 
 
 class PredictRequest(BaseModel):
@@ -73,6 +77,26 @@ class FeedbackRequest(BaseModel):
     comment: str | None = None
     input_snapshot: dict[str, Any] | None = None
     prediction_snapshot: dict[str, Any] | None = None
+
+
+class SlidingWindowRateLimiter:
+    def __init__(self, limit: int, window_seconds: int) -> None:
+        self.limit = max(1, int(limit))
+        self.window_seconds = max(1, int(window_seconds))
+        self._lock = Lock()
+        self._events: dict[str, deque[float]] = {}
+
+    def allow(self, key: str) -> bool:
+        current_time = time()
+        cutoff = current_time - self.window_seconds
+        with self._lock:
+            events = self._events.setdefault(key, deque())
+            while events and events[0] <= cutoff:
+                events.popleft()
+            if len(events) >= self.limit:
+                return False
+            events.append(current_time)
+            return True
 
 
 class ApiMetricsTracker:
@@ -174,6 +198,17 @@ def get_feedback_store() -> FeedbackStore:
     return FeedbackStore(storage_dir=DEFAULT_FEEDBACK_DIR, signing_secret=signing_secret)
 
 
+def build_guidance_scope() -> dict[str, Any]:
+    return {
+        "target_type": "historical_district_crop_pattern_guidance",
+        "live_weather_enabled": False,
+        "year_specific_context": False,
+        "current_context_source": "historical_same_month_climatology",
+        "recommended_use": "Use this as a shortlist and validate with local agronomy advice before planting.",
+        "product_note": "The model ranks crops from district-season training patterns plus field inputs. It is not a guaranteed agronomic outcome model.",
+    }
+
+
 def choose_farmer_action(prediction: dict[str, Any]) -> str:
     recommendations = prediction.get("recommendations", [])
     if not recommendations:
@@ -183,10 +218,10 @@ def choose_farmer_action(prediction: dict[str, Any]) -> str:
     confidence = float(prediction.get("confidence", 0.0) or 0.0)
     warning_count = len(prediction.get("warnings", []))
     if confidence >= 0.8 and warning_count == 0:
-        return f"Start planning inputs for {top_crop} and compare with your usual local practice."
+        return f"Use {top_crop} as a strong shortlist, then cross-check irrigation, seed access, and local field advice."
     if confidence >= 0.6:
-        return f"Shortlist {top_crop} and validate irrigation, seed access, and sowing window before committing."
-    return f"Use {top_crop} only as a starting point and verify with local field advice before planting."
+        return f"Shortlist {top_crop}, then validate sowing window and management needs before committing."
+    return f"Treat {top_crop} as a starting point only and verify with local field guidance before planting."
 
 
 def build_farmer_message(prediction: dict[str, Any]) -> str:
@@ -197,8 +232,8 @@ def build_farmer_message(prediction: dict[str, Any]) -> str:
     confidence = round(float(prediction.get("confidence", 0.0) or 0.0) * 100.0, 1)
     explanation = str(prediction.get("explanation", "")).strip()
     if explanation:
-        return f"Top match is {top_crop} at {confidence}% confidence. {explanation}"
-    return f"Top match is {top_crop} at {confidence}% confidence based on the current field profile."
+        return f"Pattern-based top match is {top_crop} at {confidence}% confidence. {explanation}"
+    return f"Pattern-based top match is {top_crop} at {confidence}% confidence from the current district-season profile."
 
 
 def model_dump(instance: BaseModel) -> dict[str, Any]:
@@ -207,19 +242,76 @@ def model_dump(instance: BaseModel) -> dict[str, Any]:
     return instance.dict(exclude_none=True)
 
 
+def get_feedback_rate_limit_count() -> int:
+    try:
+        return max(1, int(os.getenv("FEEDBACK_RATE_LIMIT_COUNT", DEFAULT_FEEDBACK_RATE_LIMIT_COUNT)))
+    except ValueError:
+        return DEFAULT_FEEDBACK_RATE_LIMIT_COUNT
+
+
+def get_feedback_rate_limit_window_seconds() -> int:
+    try:
+        return max(1, int(os.getenv("FEEDBACK_RATE_LIMIT_WINDOW_SECONDS", DEFAULT_FEEDBACK_RATE_LIMIT_WINDOW_SECONDS)))
+    except ValueError:
+        return DEFAULT_FEEDBACK_RATE_LIMIT_WINDOW_SECONDS
+
+
+def resolve_service_for_app(app: FastAPI) -> CropSuitabilityInferenceService:
+    service = getattr(app.state, "service", None)
+    if service is not None:
+        return service
+
+    lock = getattr(app.state, "service_lock", None)
+    if lock is None:
+        lock = Lock()
+        app.state.service_lock = lock
+
+    with lock:
+        service = getattr(app.state, "service", None)
+        if service is None:
+            service = get_service()
+            app.state.service = service
+        return service
+
+
+def resolve_feedback_store_for_app(app: FastAPI) -> FeedbackStore:
+    feedback_store = getattr(app.state, "feedback_store", None)
+    if feedback_store is not None:
+        return feedback_store
+
+    lock = getattr(app.state, "feedback_store_lock", None)
+    if lock is None:
+        lock = Lock()
+        app.state.feedback_store_lock = lock
+
+    with lock:
+        feedback_store = getattr(app.state, "feedback_store", None)
+        if feedback_store is None:
+            feedback_store = get_feedback_store()
+            app.state.feedback_store = feedback_store
+        return feedback_store
+
+
+def require_service(app: FastAPI) -> CropSuitabilityInferenceService:
+    try:
+        return resolve_service_for_app(app)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Model service unavailable: {exc}") from exc
+
+
 def create_app(
     service: CropSuitabilityInferenceService | None = None,
     feedback_store: FeedbackStore | None = None,
+    feedback_rate_limit_count: int | None = None,
+    feedback_rate_limit_window_seconds: int | None = None,
 ) -> FastAPI:
     api_logger = configure_api_logger(ROOT_DIR)
-    resolved_service = service or get_service()
-    resolved_feedback_store = feedback_store or get_feedback_store()
     metrics = ApiMetricsTracker()
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI):
+    async def lifespan(app_instance: FastAPI):
         try:
-            resolved_service.warmup()
+            resolve_service_for_app(app_instance).warmup()
         except Exception as exc:
             api_logger.warning("inference_warmup_failed error=%s", exc)
         yield
@@ -229,10 +321,17 @@ def create_app(
         version="1.0.0",
         lifespan=lifespan,
     )
-    app.state.service = resolved_service
-    app.state.feedback_store = resolved_feedback_store
+    app.state.service = service
+    app.state.service_lock = Lock()
+    app.state.feedback_store = feedback_store
+    app.state.feedback_store_lock = Lock()
     app.state.metrics = metrics
     app.state.api_logger = api_logger
+    app.state.guidance_scope = build_guidance_scope()
+    app.state.feedback_rate_limiter = SlidingWindowRateLimiter(
+        feedback_rate_limit_count or get_feedback_rate_limit_count(),
+        feedback_rate_limit_window_seconds or get_feedback_rate_limit_window_seconds(),
+    )
 
     @app.middleware("http")
     async def track_requests(request: Request, call_next):
@@ -258,21 +357,34 @@ def create_app(
 
     @app.get("/health")
     def health(request: Request) -> dict[str, Any]:
+        try:
+            service_instance = resolve_service_for_app(request.app)
+        except Exception as exc:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "degraded",
+                    "request_id": request.state.request_id,
+                    "detail": f"Model service unavailable: {exc}",
+                    "artifact_dir": str(resolve_default_artifact_dir() or ""),
+                },
+            )
         return {
             "status": "ok",
             "request_id": request.state.request_id,
-            "model_version": resolved_service.model_version,
-            "mode": resolved_service.mode,
-            "sanity_mode": resolved_service.sanity_mode,
-            "artifact_dir": str(resolved_service.artifact_dir),
+            "model_version": service_instance.model_version,
+            "mode": service_instance.mode,
+            "sanity_mode": service_instance.sanity_mode,
+            "artifact_dir": str(service_instance.artifact_dir),
         }
 
     @app.get("/sanity")
     def sanity(request: Request) -> dict[str, Any]:
+        service_instance = require_service(request.app)
         return {
             "status": "ok",
             "request_id": request.state.request_id,
-            "sanity_checks": resolved_service.get_sanity_summary(),
+            "sanity_checks": service_instance.get_sanity_summary(),
         }
 
     @app.get("/metrics")
@@ -285,17 +397,20 @@ def create_app(
 
     @app.get("/catalog")
     def catalog(request: Request) -> dict[str, Any]:
-        catalog_payload = resolved_service.get_catalog()
+        service_instance = require_service(request.app)
+        feedback_store_instance = resolve_feedback_store_for_app(request.app)
+        catalog_payload = service_instance.get_catalog()
         return {
             "status": "ok",
             "request_id": request.state.request_id,
             **catalog_payload,
-            "feedback": resolved_feedback_store.get_storage_info(),
+            "feedback": feedback_store_instance.get_storage_info(),
             "language_support": {
                 "current": ["English"],
                 "planned": SUPPORTED_LANGUAGES[1:],
                 "human_review_required_for_training": True,
             },
+            "guidance_scope": request.app.state.guidance_scope,
         }
 
     @app.get("/context")
@@ -305,7 +420,8 @@ def create_app(
         state: str | None = None,
         target_time: str | None = None,
     ) -> dict[str, Any]:
-        localized = resolved_service.get_localized_context(
+        service_instance = require_service(request.app)
+        localized = service_instance.get_localized_context(
             region=region,
             state=state,
             target_time=target_time,
@@ -313,6 +429,7 @@ def create_app(
         return {
             "status": "ok",
             "request_id": request.state.request_id,
+            "guidance_scope": request.app.state.guidance_scope,
             **localized,
         }
 
@@ -321,8 +438,9 @@ def create_app(
         if not payload.features:
             raise HTTPException(status_code=422, detail="Provide at least one feature value.")
         started = perf_counter()
+        service_instance = require_service(request.app)
         try:
-            prediction = resolved_service.predict(model_dump(payload))
+            prediction = service_instance.predict(model_dump(payload))
         except InferenceValidationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         elapsed_ms = round((perf_counter() - started) * 1000.0, 2)
@@ -332,6 +450,7 @@ def create_app(
             "prediction_time_ms": elapsed_ms,
             "farmer_action": choose_farmer_action(prediction),
             "farmer_message": build_farmer_message(prediction),
+            "guidance_scope": request.app.state.guidance_scope,
             **prediction,
         }
 
@@ -340,8 +459,9 @@ def create_app(
         if not payload.features:
             raise HTTPException(status_code=422, detail="Provide at least one feature value.")
         started = perf_counter()
+        service_instance = require_service(request.app)
         try:
-            simulation = resolved_service.simulate_scenarios(
+            simulation = service_instance.simulate_scenarios(
                 model_dump(payload),
                 scenario_names=payload.scenario_names,
             )
@@ -352,12 +472,21 @@ def create_app(
             "status": "ok",
             "request_id": request.state.request_id,
             "prediction_time_ms": elapsed_ms,
+            "guidance_scope": request.app.state.guidance_scope,
             **simulation,
         }
 
     @app.post("/feedback")
     def feedback(request: Request, payload: FeedbackRequest) -> dict[str, Any]:
-        submitted = resolved_feedback_store.submit(model_dump(payload))
+        client_host = request.client.host if request.client and request.client.host else "unknown"
+        rate_limit_key = f"feedback:{client_host}"
+        if not request.app.state.feedback_rate_limiter.allow(rate_limit_key):
+            raise HTTPException(
+                status_code=429,
+                detail="Feedback rate limit reached for this client. Please wait before submitting again.",
+            )
+        feedback_store_instance = resolve_feedback_store_for_app(request.app)
+        submitted = feedback_store_instance.submit(model_dump(payload))
         consent_for_training = bool(payload.consent_for_training)
         return {
             "status": "stored",
