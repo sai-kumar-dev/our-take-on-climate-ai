@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 import os
 from datetime import datetime
 from typing import Any
@@ -150,7 +151,24 @@ def numeric_step(feature: str) -> float:
 
 
 def build_target_time(month_value: str) -> str:
-    return f"{datetime.now().year}-{month_value}"
+    return month_value
+
+
+def payload_signature(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def invalidate_stale_results(
+    base_signature: str,
+    simulation_signature: str,
+) -> None:
+    previous_prediction_signature = st.session_state.get("prediction_signature")
+    previous_simulation_signature = st.session_state.get("simulation_signature")
+    if previous_prediction_signature is not None and previous_prediction_signature != base_signature:
+        st.session_state.pop("last_prediction", None)
+        st.session_state.pop("last_payload", None)
+    if previous_simulation_signature is not None and previous_simulation_signature != simulation_signature:
+        st.session_state.pop("last_simulation", None)
 
 
 def render_prediction(prediction: dict[str, Any]) -> None:
@@ -164,7 +182,7 @@ def render_prediction(prediction: dict[str, Any]) -> None:
     st.markdown(
         f"""
         <div class="result-card">
-            <h3 style="margin:0 0 0.4rem 0; color:#1f5d46;">Top recommendation: {html.escape(pretty(top_choice.get("crop", "")))}</h3>
+            <h3 style="margin:0 0 0.4rem 0; color:#1f5d46;">Top pattern match: {html.escape(pretty(top_choice.get("crop", "")))}</h3>
             <p style="margin:0; color:#243830;">Confidence: {confidence:.1f}%</p>
             <p style="margin:0.7rem 0 0 0; color:#243830;">{html.escape(prediction.get("farmer_message", prediction.get("explanation", "")))}</p>
         </div>
@@ -291,18 +309,13 @@ def render_feedback_form(region: str, state: str, prediction: dict[str, Any], pa
 
 def main() -> None:
     st.set_page_config(
-        page_title="Climate Crop Advisory",
+        page_title="Climate Crop Guidance",
         page_icon=":seedling:",
         layout="wide",
     )
     apply_styles()
 
-    st.title("Climate Crop Advisory")
-    st.markdown(
-        '<div class="soft-note">We use district-season context from the trained model to prefill inputs, '
-        "flag unlikely values, and keep the form simple for first-time users.</div>",
-        unsafe_allow_html=True,
-    )
+    st.title("Climate Crop Guidance")
 
     health, health_error = fetch_json("/health")
     catalog, catalog_error = fetch_json("/catalog")
@@ -313,6 +326,18 @@ def main() -> None:
     if catalog_error or not catalog:
         st.error(f"Catalog load failed: {catalog_error or 'No response'}")
         st.stop()
+
+    guidance_scope = catalog.get("guidance_scope", {})
+    live_weather_status = catalog.get("temporal_context", {}).get("live_weather_status", "unknown")
+    scope_note = guidance_scope.get(
+        "product_note",
+        "This prototype uses historical district-month context from training data.",
+    )
+    st.markdown(
+        f'<div class="soft-note">{html.escape(scope_note)} '
+        f'Current live weather status: {html.escape(pretty(str(live_weather_status)))}.</div>',
+        unsafe_allow_html=True,
+    )
 
     left, right = st.columns([1.4, 1.0])
     with right:
@@ -359,12 +384,13 @@ def main() -> None:
             next(iter(month_label_map.keys())),
         )
         selected_month_label = st.selectbox(
-            "Target month",
+            "Target month for historical district context",
             options=list(month_label_map.keys()),
             index=list(month_label_map.keys()).index(default_month_label),
         )
         target_month = month_label_map[selected_month_label]
         target_time = build_target_time(target_month)
+        st.caption("Current autofill uses same-month historical district context. Month drives the context lookup today; live year-specific weather autofill is still pending.")
 
     context, context_error = fetch_json(
         "/context",
@@ -392,6 +418,14 @@ def main() -> None:
                 f"{pretty(item.get('crop', ''))} ({round(float(item.get('score', 0.0)) * 100.0, 1)}%)"
                 for item in crop_prior[:5]
             )
+        )
+    source_summary = context.get("source_summary", {})
+    if source_summary:
+        st.caption(
+            "Autofill source: "
+            f"climate={pretty(str(source_summary.get('climate', 'unknown')))}, "
+            f"soil={pretty(str(source_summary.get('soil', 'unknown')))}, "
+            f"crop prior={pretty(str(source_summary.get('crop_prior', 'unknown')))}"
         )
 
     st.subheader("Main inputs")
@@ -455,6 +489,10 @@ def main() -> None:
             "target_season": season_for(target_month),
         },
     }
+    selected_scenario_names = [scenario_options[item] for item in selected_scenarios]
+    base_signature = payload_signature(payload)
+    simulation_signature = payload_signature({**payload, "scenario_names": selected_scenario_names})
+    invalidate_stale_results(base_signature, simulation_signature)
 
     predict_col, simulate_col = st.columns(2)
     if predict_col.button("Get recommendation", use_container_width=True):
@@ -464,11 +502,12 @@ def main() -> None:
         else:
             st.session_state["last_prediction"] = prediction
             st.session_state["last_payload"] = payload
+            st.session_state["prediction_signature"] = base_signature
 
     if simulate_col.button("Run demo scenarios", use_container_width=True):
         simulation_payload = {
             **payload,
-            "scenario_names": [scenario_options[item] for item in selected_scenarios],
+            "scenario_names": selected_scenario_names,
         }
         simulation, error = post_json("/simulate", simulation_payload)
         if error:
@@ -476,6 +515,7 @@ def main() -> None:
         else:
             st.session_state["last_simulation"] = simulation
             st.session_state["last_payload"] = payload
+            st.session_state["simulation_signature"] = simulation_signature
 
     prediction = st.session_state.get("last_prediction")
     if prediction:
