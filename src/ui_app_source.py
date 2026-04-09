@@ -615,7 +615,13 @@ def render_layman_explanation(
         return
 
     supported_languages = llm_support.get("supported_languages", PREFERRED_LANGUAGES) or PREFERRED_LANGUAGES
-    default_language = st.session_state.get("llm_guide_language", supported_languages[0] if supported_languages else "English")
+    default_language = st.selectbox(
+        "Explanation language",
+        options=supported_languages,
+        index=0,
+        key="layman_guide_language",
+        help="Choose the language for the simple farmer explanation.",
+    )
     explanation_signature = payload_signature(
         {
             "prediction_request_id": prediction.get("request_id"),
@@ -901,15 +907,37 @@ def render_simulation(simulation: dict[str, Any]) -> None:
         return
 
     st.subheader("Scenario comparison")
+    base_prediction = simulation.get("base_prediction", {})
+    base_top_choice = (base_prediction.get("recommendations") or [{}])[0]
+    base_confidence = float(base_prediction.get("confidence", 0.0) or 0.0) * 100.0
     for scenario_name, payload in scenario_results.items():
         display_name = payload.get("display_name", pretty(scenario_name))
         prediction = payload.get("prediction", {})
         top_choice = prediction.get("recommendations", [{}])[0]
+        scenario_confidence = float(prediction.get("confidence", 0.0) or 0.0) * 100.0
+        comparison = payload.get("comparison", {})
+        applied_changes = payload.get("applied_changes", [])
+        rule_shift = payload.get("rule_shift", {})
+        scenario_adjustment = payload.get("scenario_adjustment", {})
+        effect_strength = pretty(str(comparison.get("effect_strength", "small")))
+        stress_signal = pretty(str(rule_shift.get("stress_level", "small")))
+        top_before = pretty(str(comparison.get("top_crop_before", base_top_choice.get("crop", ""))))
+        top_after = pretty(str(comparison.get("top_crop_after", top_choice.get("crop", ""))))
+        top_score_delta = round(float(comparison.get("top_score_delta", 0.0)) * 100.0, 2)
+        avg_abs_delta = round(float(comparison.get("average_abs_score_delta", 0.0)) * 100.0, 2)
+        if comparison.get("top_crop_changed"):
+            summary_text = f"Top crop changed from {top_before} to {top_after}."
+        else:
+            summary_text = (
+                f"Top crop stayed {top_after}, but the ranking still moved. "
+                f"Top-score change: {top_score_delta} points."
+            )
         st.markdown(
             f"""
             <div class="result-card">
                 <strong style="color:#1f5d46;">{html.escape(display_name)}</strong><br>
-                <span style="color:#243830;">Top crop: {html.escape(pretty(top_choice.get("crop", "")))}</span>
+                <span style="color:#243830;">Top crop: {html.escape(pretty(top_choice.get("crop", "")))}</span><br>
+                <span class="small-note">{html.escape(summary_text)}</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -917,7 +945,59 @@ def render_simulation(simulation: dict[str, Any]) -> None:
         guide_copy = SCENARIO_GUIDE.get(scenario_name)
         if guide_copy:
             st.caption(guide_copy)
-        comparison = payload.get("comparison", {})
+        info_columns = st.columns(3)
+        with info_columns[0]:
+            st.markdown(
+                f"""
+                <div class="insight-card">
+                    <div class="mini-kicker">Model shift</div>
+                    <div class="small-note">{html.escape(effect_strength)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with info_columns[1]:
+            st.markdown(
+                f"""
+                <div class="insight-card">
+                    <div class="mini-kicker">Weather stress signal</div>
+                    <div class="small-note">{html.escape(stress_signal)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with info_columns[2]:
+            st.markdown(
+                f"""
+                <div class="insight-card">
+                    <div class="mini-kicker">Confidence shift</div>
+                    <div class="small-note">{base_confidence:.1f}% -> {scenario_confidence:.1f}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        st.caption(
+            f"Model movement: {avg_abs_delta:.2f} points average score change."
+        )
+        top_crop_rule_delta = round(float(rule_shift.get("top_crop_rule_delta", 0.0)) * 100.0, 2)
+        if rule_shift:
+            st.caption(
+                f"Rule-based stress check for {pretty(str(rule_shift.get('top_crop', top_after)))}: "
+                f"{top_crop_rule_delta:+.2f} points."
+            )
+        if scenario_adjustment:
+            adjustment_method = pretty(str(scenario_adjustment.get("method", "model_only")))
+            blend_weight = scenario_adjustment.get("blend_weight")
+            if blend_weight is not None:
+                st.caption(
+                    f"Scenario method: {adjustment_method} with rule blend weight {float(blend_weight):.2f}."
+                )
+        if applied_changes:
+            change_text = ", ".join(
+                f"{pretty(str(item.get('feature', '')))}: {item.get('base_value')} -> {item.get('scenario_value')}"
+                for item in applied_changes[:4]
+            )
+            st.caption(f"Scenario changed: {change_text}")
         rows = comparison.get("rows", [])[:5]
         if rows:
             table = pd.DataFrame(
@@ -926,6 +1006,7 @@ def render_simulation(simulation: dict[str, Any]) -> None:
                         "Crop": pretty(row.get("crop", "")),
                         "Base score": round(float(row.get("base_score", 0.0)) * 100.0, 2),
                         "Scenario score": round(float(row.get("scenario_score", 0.0)) * 100.0, 2),
+                        "Score delta": round(float(row.get("score_delta", 0.0)) * 100.0, 2),
                         "Rank change": row.get("rank_change", 0),
                     }
                     for row in rows

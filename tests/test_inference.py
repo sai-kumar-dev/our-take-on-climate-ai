@@ -110,6 +110,33 @@ class InferenceServiceTests(unittest.TestCase):
         self.assertTrue(0.0 <= result["confidence"] <= 1.0)
         self.assertIn("top_features", result)
 
+    def test_physical_bounds_are_enforced_for_real_world_features(self) -> None:
+        payload = {
+            "region": "Pune",
+            "features": {
+                "temp_avg": 30.0,
+                "rain_total": -25.0,
+                "humidity_avg": -10.0,
+                "dry_spell_days": -3.0,
+                "pH": 6.7,
+                "N": -50.0,
+                "P": -10.0,
+                "K": -5.0,
+                "N_class": "medium",
+                "P_class": "medium",
+                "K_class": "medium",
+                "fertility_class": "medium",
+            },
+        }
+        prepared = self.service.prepare_input(payload)
+        row = prepared.frame.iloc[0]
+        self.assertGreaterEqual(float(row["rain_total"]), 0.0)
+        self.assertGreaterEqual(float(row["humidity_avg"]), 0.0)
+        self.assertGreaterEqual(float(row["dry_spell_days"]), 0.0)
+        self.assertGreaterEqual(float(row["N"]), 0.0)
+        self.assertGreaterEqual(float(row["P"]), 0.0)
+        self.assertGreaterEqual(float(row["K"]), 0.0)
+
     def test_scenario_simulation_returns_comparison_rows(self) -> None:
         payload = {
             "region": "Pune",
@@ -136,9 +163,19 @@ class InferenceServiceTests(unittest.TestCase):
         self.assertIn("base_prediction", result)
         self.assertIn("scenario_results", result)
         self.assertIn("low_rainfall", result["scenario_results"])
-        comparison = result["scenario_results"]["low_rainfall"]["comparison"]
+        low_rainfall_result = result["scenario_results"]["low_rainfall"]
+        comparison = low_rainfall_result["comparison"]
         self.assertIn("rows", comparison)
         self.assertTrue(comparison["rows"])
+        self.assertIn("top_crop_before", comparison)
+        self.assertIn("top_crop_after", comparison)
+        self.assertIn("effect_strength", comparison)
+        self.assertIn("distribution_shift", comparison)
+        self.assertIn("applied_changes", low_rainfall_result)
+        self.assertTrue(low_rainfall_result["applied_changes"])
+        self.assertIn("average_abs_score_delta", comparison)
+        self.assertIn("scenario_adjustment", low_rainfall_result)
+        self.assertIn("rule_shift", low_rainfall_result)
 
     def test_catalog_exposes_model_coverage(self) -> None:
         catalog = self.service.get_catalog()
@@ -186,6 +223,11 @@ class InferenceServiceTests(unittest.TestCase):
         self.assertGreater(result["input_quality"]["context_autofill_count"], 0)
         self.assertIn("localized_context", result)
         self.assertEqual(result["localized_context"]["target_month"], "06")
+
+    def test_zero_padded_target_month_is_accepted(self) -> None:
+        self.assertEqual(self.service._normalize_categorical_value("target_month", "06"), "6")
+        self.assertEqual(self.service._normalize_categorical_value("target_month", "6"), "6")
+        self.assertEqual(self.service._normalize_categorical_value("target_season", "Kharif"), "kharif")
 
 
 if __name__ == "__main__":

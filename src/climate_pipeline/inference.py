@@ -41,6 +41,19 @@ UNIT_RANGE_FEATURES = {
     "geo_confidence",
     "data_confidence",
 }
+HARD_NUMERIC_BOUNDS = {
+    "humidity_avg": (0.0, 100.0),
+    "pH": (0.0, 14.0),
+    "rain_total": (0.0, None),
+    "rain_lag_14": (0.0, None),
+    "max_rain_1d": (0.0, None),
+    "rain_variance": (0.0, None),
+    "dry_spell_days": (0.0, None),
+    "N": (0.0, None),
+    "P": (0.0, None),
+    "K": (0.0, None),
+    "soil_health_index": (0.0, 100.0),
+}
 CLIMATE_BUFFER_FEATURES = {
     "temp_avg",
     "rain_total",
@@ -59,27 +72,38 @@ PRESET_SCENARIOS = {
     "low_rainfall": {
         "display_name": "Low Rainfall",
         "feature_multipliers": {
-            "rain_total": 0.6,
-            "rain_lag_14": 0.6,
-            "humidity_avg": 0.9,
+            "rain_total": 0.45,
+            "rain_lag_14": 0.45,
+            "max_rain_1d": 0.55,
+            "humidity_avg": 0.88,
+        },
+        "feature_additions": {
+            "dry_spell_days": 6.0,
+            "max_temp": 1.5,
+            "max_temp_3d": 1.5,
         },
     },
     "heatwave": {
         "display_name": "Heatwave",
         "feature_additions": {
-            "temp_avg": 4.0,
-            "max_temp": 5.0,
-            "max_temp_3d": 5.0,
-            "humidity_avg": -5.0,
+            "temp_avg": 5.0,
+            "temp_lag_7": 4.0,
+            "max_temp": 7.0,
+            "max_temp_3d": 8.0,
+            "humidity_avg": -8.0,
+            "dry_spell_days": 4.0,
         },
     },
     "high_irrigation": {
         "display_name": "High Irrigation",
         "feature_additions": {
-            "irrigation_index": 0.3,
+            "irrigation_index": 0.35,
+            "humidity_avg": 2.0,
+            "dry_spell_days": -2.0,
         },
     },
 }
+DEFAULT_SCENARIO_RULE_BLEND_WEIGHT = 1.25
 
 
 @dataclass
@@ -135,6 +159,13 @@ class CropSuitabilityInferenceService:
         self.calibration_config = feature_config.get("calibration", {})
         self.required_features = list(self.inference_settings.get("required_features", []))
         self.drift_zscore_threshold = float(self.inference_settings.get("drift_zscore_threshold", 3.0))
+        self.scenario_rule_blend_weight = float(
+            np.clip(
+                self.inference_settings.get("scenario_rule_blend_weight", DEFAULT_SCENARIO_RULE_BLEND_WEIGHT),
+                0.0,
+                2.5,
+            )
+        )
         self.warmup_enabled = bool(self.inference_settings.get("warmup_enabled", True))
         self.warmup_explainer_count = int(self.inference_settings.get("warmup_explainer_count", 2))
         self.evaluation_report = self._load_json_artifact("evaluation_report.json")
@@ -221,6 +252,7 @@ class CropSuitabilityInferenceService:
             drift_report=prepared.drift_report,
             localized_context=prepared.localized_context,
         )
+        base_rule_distribution = self._rule_based_distribution(prepared.frame)
 
         selected_names = scenario_names or list(PRESET_SCENARIOS.keys())
         scenario_results: dict[str, Any] = {}
@@ -231,24 +263,47 @@ class CropSuitabilityInferenceService:
             scenario_cfg = PRESET_SCENARIOS[scenario_name]
             scenario_frame = apply_scenario(prepared.frame, scenario_cfg)
             scenario_frame = self._clip_frame_to_safe_ranges(scenario_frame)
-            scenario_probabilities = self._predict_probabilities(scenario_frame)
+            raw_scenario_probabilities = self._predict_probabilities(scenario_frame)
+            scenario_rule_distribution = self._rule_based_distribution(scenario_frame)
+            scenario_probabilities, scenario_adjustment = self._blend_scenario_probabilities(
+                model_probabilities=raw_scenario_probabilities,
+                base_rule_distribution=base_rule_distribution,
+                rule_distribution=scenario_rule_distribution,
+                scenario_name=scenario_name,
+            )
             scenario_drift_report, scenario_drift_warnings = self._detect_feature_drift(scenario_frame)
             scenario_prediction = self._build_prediction_response(
                 frame=scenario_frame,
                 probabilities=scenario_probabilities,
                 top_n=top_n,
                 region=prepared.region,
-                warnings=[f"Scenario applied: {scenario_cfg['display_name']}.", *scenario_drift_warnings],
+                warnings=[
+                    f"Scenario applied: {scenario_cfg['display_name']}.",
+                    "Scenario guidance blends model output with agronomy stress rules for clearer what-if behavior.",
+                    *scenario_drift_warnings,
+                ],
                 input_quality={**prepared.input_quality, "scenario": scenario_name},
                 data_confidence=prepared.data_confidence,
                 geo_confidence=prepared.geo_confidence,
                 drift_report=scenario_drift_report,
                 localized_context=prepared.localized_context,
             )
+            comparison = self._build_comparison_table(base_probabilities, scenario_probabilities)
             scenario_results[scenario_name] = {
                 "display_name": scenario_cfg["display_name"],
                 "prediction": scenario_prediction,
-                "comparison": self._build_comparison_table(base_probabilities, scenario_probabilities),
+                "comparison": comparison,
+                "scenario_adjustment": scenario_adjustment,
+                "rule_shift": self._build_rule_shift_summary(
+                    base_rule_distribution=base_rule_distribution,
+                    scenario_rule_distribution=scenario_rule_distribution,
+                    base_probabilities=base_probabilities,
+                ),
+                "applied_changes": self._build_scenario_applied_changes(
+                    base_frame=prepared.frame,
+                    scenario_frame=scenario_frame,
+                    scenario_cfg=scenario_cfg,
+                ),
             }
 
         return {
@@ -366,7 +421,7 @@ class CropSuitabilityInferenceService:
                     missing_required_features.append(feature)
                 continue
 
-            value = str(raw_value).strip().lower()
+            value = self._normalize_categorical_value(feature, raw_value)
             allowed = {str(item).strip().lower() for item in self.categorical_levels.get(feature, [])}
             if allowed and value not in allowed:
                 row[feature] = self.categorical_fill_value
@@ -555,6 +610,19 @@ class CropSuitabilityInferenceService:
         except (TypeError, ValueError):
             return fallback
 
+    def _normalize_categorical_value(self, feature: str, raw_value: Any) -> str:
+        value = str(raw_value).strip().lower()
+        if not value:
+            return self.categorical_fill_value
+        if feature == "target_month":
+            try:
+                month_value = int(value)
+            except (TypeError, ValueError):
+                return value
+            if 1 <= month_value <= 12:
+                return str(month_value)
+        return value
+
     def _predict_probabilities(self, frame: pd.DataFrame) -> np.ndarray:
         probabilities = np.asarray(self.model_bundle.predict(frame)[0], dtype=float)
         return probabilities / np.clip(probabilities.sum(), 1e-9, None)
@@ -647,9 +715,112 @@ class CropSuitabilityInferenceService:
                 }
             )
         rows.sort(key=lambda item: item["scenario_rank"])
+        max_abs_delta_row = max(rows, key=lambda item: abs(float(item["score_delta"])), default=None)
+        largest_rank_change_row = max(rows, key=lambda item: abs(int(item["rank_change"])), default=None)
+        top_score_delta = float(scenario_probabilities[int(scenario_ranks[0])] - base_probabilities[int(base_ranks[0])])
+        average_abs_delta = float(np.mean(np.abs(scenario_probabilities - base_probabilities)))
+        distribution_shift = float(0.5 * np.sum(np.abs(scenario_probabilities - base_probabilities)))
+        js_divergence = float(jensen_shannon_divergence(base_probabilities.reshape(1, -1), scenario_probabilities.reshape(1, -1))[0])
+        if distribution_shift >= 0.18 or abs(top_score_delta) >= 0.12:
+            effect_strength = "strong"
+        elif distribution_shift >= 0.08 or abs(top_score_delta) >= 0.05:
+            effect_strength = "moderate"
+        else:
+            effect_strength = "small"
         return {
             "top_crop_changed": int(base_ranks[0]) != int(scenario_ranks[0]),
+            "top_crop_before": crop_name_from_label(self.label_columns[int(base_ranks[0])]),
+            "top_crop_after": crop_name_from_label(self.label_columns[int(scenario_ranks[0])]),
+            "top_score_delta": round(top_score_delta, 6),
+            "average_abs_score_delta": round(average_abs_delta, 6),
+            "distribution_shift": round(distribution_shift, 6),
+            "js_divergence": round(js_divergence, 6),
+            "effect_strength": effect_strength,
+            "largest_score_shift": max_abs_delta_row,
+            "largest_rank_shift": largest_rank_change_row,
             "rows": rows,
+        }
+
+    def _build_scenario_applied_changes(
+        self,
+        base_frame: pd.DataFrame,
+        scenario_frame: pd.DataFrame,
+        scenario_cfg: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        changes: list[dict[str, Any]] = []
+        feature_names = set(scenario_cfg.get("feature_multipliers", {}).keys()) | set(
+            scenario_cfg.get("feature_additions", {}).keys()
+        )
+        for feature in sorted(feature_names):
+            if feature not in base_frame.columns or feature not in scenario_frame.columns:
+                continue
+            base_value = float(pd.to_numeric(base_frame[feature], errors="coerce").iloc[0])
+            scenario_value = float(pd.to_numeric(scenario_frame[feature], errors="coerce").iloc[0])
+            if abs(scenario_value - base_value) < 1e-9:
+                continue
+            changes.append(
+                {
+                    "feature": feature,
+                    "base_value": round(base_value, 4),
+                    "scenario_value": round(scenario_value, 4),
+                    "delta": round(scenario_value - base_value, 4),
+                }
+            )
+        return changes
+
+    def _blend_scenario_probabilities(
+        self,
+        model_probabilities: np.ndarray,
+        base_rule_distribution: np.ndarray,
+        rule_distribution: np.ndarray,
+        scenario_name: str,
+    ) -> tuple[np.ndarray, dict[str, Any]]:
+        blend_weight = float(np.clip(self.scenario_rule_blend_weight, 0.0, 2.5))
+        normalized_model = np.asarray(model_probabilities, dtype=float)
+        normalized_model = normalized_model / np.clip(normalized_model.sum(), 1e-9, None)
+        normalized_base_rule = np.asarray(base_rule_distribution, dtype=float)
+        normalized_base_rule = normalized_base_rule / np.clip(normalized_base_rule.sum(), 1e-9, None)
+        normalized_rule = np.asarray(rule_distribution, dtype=float)
+        normalized_rule = normalized_rule / np.clip(normalized_rule.sum(), 1e-9, None)
+        if blend_weight <= 0.0:
+            return normalized_model, {
+                "method": "model_only",
+                "blend_weight": 0.0,
+                "scenario_name": scenario_name,
+            }
+        delta = normalized_rule - normalized_base_rule
+        blended = normalized_model + (blend_weight * delta)
+        blended = np.clip(blended, 1e-6, None)
+        blended = blended / np.clip(blended.sum(), 1e-9, None)
+        return blended, {
+            "method": "model_plus_rule_delta",
+            "blend_weight": round(blend_weight, 4),
+            "scenario_name": scenario_name,
+        }
+
+    def _build_rule_shift_summary(
+        self,
+        base_rule_distribution: np.ndarray,
+        scenario_rule_distribution: np.ndarray,
+        base_probabilities: np.ndarray,
+    ) -> dict[str, Any]:
+        base_top_index = int(np.argmax(base_probabilities))
+        top_crop = crop_name_from_label(self.label_columns[base_top_index])
+        average_abs_delta = float(np.mean(np.abs(scenario_rule_distribution - base_rule_distribution)))
+        distribution_shift = float(0.5 * np.sum(np.abs(scenario_rule_distribution - base_rule_distribution)))
+        top_crop_delta = float(scenario_rule_distribution[base_top_index] - base_rule_distribution[base_top_index])
+        if distribution_shift >= 0.18 or top_crop_delta <= -0.10:
+            stress_level = "strong"
+        elif distribution_shift >= 0.08 or top_crop_delta <= -0.04:
+            stress_level = "moderate"
+        else:
+            stress_level = "small"
+        return {
+            "stress_level": stress_level,
+            "distribution_shift": round(distribution_shift, 6),
+            "average_abs_score_delta": round(average_abs_delta, 6),
+            "top_crop": top_crop,
+            "top_crop_rule_delta": round(top_crop_delta, 6),
         }
 
     def get_sanity_summary(self) -> dict[str, Any]:
@@ -747,7 +918,13 @@ class CropSuitabilityInferenceService:
 
         summary = self.numeric_summary.get(feature, {})
         if not summary:
-            return value, False
+            hard_bounds = HARD_NUMERIC_BOUNDS.get(feature)
+            if hard_bounds is None:
+                return value, False
+            lower_bound = hard_bounds[0] if hard_bounds[0] is not None else value
+            upper_bound = hard_bounds[1] if hard_bounds[1] is not None else value
+            clipped = float(np.clip(value, lower_bound, upper_bound))
+            return clipped, clipped != value
 
         feature_min = float(summary.get("min", value))
         feature_max = float(summary.get("max", value))
@@ -755,6 +932,13 @@ class CropSuitabilityInferenceService:
         margin = max(feature_std * 3.0, abs(feature_max - feature_min) * 0.25, 0.5)
         lower_bound = feature_min - margin
         upper_bound = feature_max + margin
+        hard_bounds = HARD_NUMERIC_BOUNDS.get(feature)
+        if hard_bounds is not None:
+            hard_lower, hard_upper = hard_bounds
+            if hard_lower is not None:
+                lower_bound = max(lower_bound, float(hard_lower))
+            if hard_upper is not None:
+                upper_bound = min(upper_bound, float(hard_upper))
         clipped = float(np.clip(value, lower_bound, upper_bound))
         return clipped, clipped != value
 
