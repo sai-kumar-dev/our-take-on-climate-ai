@@ -44,6 +44,81 @@ FIELD_HELP = {
     "rotation_score": "Higher means better crop rotation or field diversification history.",
 }
 PREFERRED_LANGUAGES = ["English", "Hindi", "Marathi", "Kannada", "Telugu", "Tamil"]
+BEGINNER_STEPS = [
+    {
+        "title": "Pick your district",
+        "body": "Choose the state, district, and month. The app pulls the closest historical district-season context from training data.",
+    },
+    {
+        "title": "Review field inputs",
+        "body": "Check weather, soil, and irrigation values. If a value looks unrealistic, change it before asking for guidance.",
+    },
+    {
+        "title": "Read the result slowly",
+        "body": "Use the top crop as a shortlist, read the explanation, then review warnings and next-step checks before acting.",
+    },
+]
+FIELD_GUIDE = {
+    "temp_avg": {
+        "plain": "Average daytime field temperature for the current crop window.",
+        "why": "Temperature strongly affects crop stress, growth speed, and flowering.",
+    },
+    "rain_total": {
+        "plain": "Total rainfall during the current period you want to judge.",
+        "why": "Rainfall changes water availability and the need for irrigation.",
+    },
+    "humidity_avg": {
+        "plain": "Average air moisture around the crop period.",
+        "why": "Humidity affects heat stress, disease pressure, and moisture loss.",
+    },
+    "max_temp": {
+        "plain": "Highest likely temperature in the current period.",
+        "why": "Short heat spikes can damage sensitive crops even when the average looks fine.",
+    },
+    "max_temp_3d": {
+        "plain": "Recent hottest stretch over a few days.",
+        "why": "This helps the model notice heatwave-like conditions.",
+    },
+    "rain_lag_14": {
+        "plain": "Rainfall from the recent 14-day period.",
+        "why": "Recent rain often matters more than seasonal total for soil moisture.",
+    },
+    "pH": {
+        "plain": "Acidity or alkalinity of the soil.",
+        "why": "Wrong pH can reduce nutrient availability even when fertilizer is present.",
+    },
+    "N": {
+        "plain": "Nitrogen level in the soil.",
+        "why": "Nitrogen supports leaf growth and crop vigor.",
+    },
+    "P": {
+        "plain": "Phosphorus level in the soil.",
+        "why": "Phosphorus supports root growth and early crop establishment.",
+    },
+    "K": {
+        "plain": "Potassium level in the soil.",
+        "why": "Potassium supports water balance, stress resistance, and grain or fruit quality.",
+    },
+    "irrigation_index": {
+        "plain": "How dependable irrigation support is on this field.",
+        "why": "Reliable irrigation can keep some water-intensive crops viable in weaker rainfall periods.",
+    },
+    "rotation_score": {
+        "plain": "How healthy and varied the recent crop rotation has been.",
+        "why": "Better rotation often improves soil condition and lowers disease pressure.",
+    },
+}
+RESULT_GUIDE = [
+    ("Top pattern match", "The crop that best matches the entered field profile and district-month history."),
+    ("Confidence", "Higher confidence means the entered conditions look more familiar to the trained model and agree better with the rule checks."),
+    ("Warnings", "Warnings tell you where the inputs look unusual, missing, or risky for the model."),
+    ("Scenario check", "Scenarios show whether the ranking changes if rainfall or heat conditions become worse."),
+]
+SCENARIO_GUIDE = {
+    "low_rainfall": "Tests how the ranking changes if the period gets meaningfully drier.",
+    "heatwave": "Tests how the ranking changes if temperatures jump higher than normal.",
+    "high_irrigation": "Tests whether stronger irrigation would improve the ranking for water-sensitive crops.",
+}
 
 
 def api_url(path: str) -> str:
@@ -92,7 +167,9 @@ def apply_styles() -> None:
         """
         <style>
         .stApp {
-            background: linear-gradient(180deg, #f7f1e6 0%, #f1eadb 100%);
+            background:
+                radial-gradient(circle at top left, rgba(222, 196, 150, 0.36), transparent 34%),
+                linear-gradient(180deg, #f7f1e6 0%, #efe5d4 100%);
         }
         [data-baseweb="input"] input,
         [data-baseweb="base-input"] input,
@@ -117,6 +194,96 @@ def apply_styles() -> None:
             border-left: 4px solid #1f5d46;
             padding: 0.9rem 1rem;
             border-radius: 10px;
+        }
+        .hero-shell {
+            background: linear-gradient(135deg, #fff7ea 0%, #f4ead8 100%);
+            border: 1px solid #d8c6a7;
+            border-radius: 24px;
+            padding: 1.4rem 1.5rem;
+            box-shadow: 0 18px 40px rgba(62, 46, 22, 0.08);
+            margin-bottom: 1rem;
+        }
+        .hero-title {
+            font-family: Georgia, "Times New Roman", serif;
+            color: #1b4532;
+            font-size: 2rem;
+            line-height: 1.1;
+            margin: 0 0 0.4rem 0;
+        }
+        .hero-copy {
+            color: #31443a;
+            margin: 0;
+            font-size: 1rem;
+        }
+        .mini-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.8rem;
+            margin: 1rem 0 0 0;
+        }
+        .mini-card, .guide-card, .insight-card {
+            background: rgba(255, 250, 242, 0.95);
+            border: 1px solid #dfd2bc;
+            border-radius: 18px;
+            padding: 0.95rem 1rem;
+        }
+        .mini-kicker {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #7b6950;
+            margin-bottom: 0.15rem;
+        }
+        .mini-value {
+            color: #1f5d46;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+        .step-number {
+            display: inline-block;
+            width: 1.75rem;
+            height: 1.75rem;
+            border-radius: 999px;
+            background: #1f5d46;
+            color: #fffaf2;
+            text-align: center;
+            line-height: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+        }
+        .section-title {
+            font-family: Georgia, "Times New Roman", serif;
+            color: #234332;
+            margin-top: 0.3rem;
+            margin-bottom: 0.2rem;
+        }
+        .confidence-strip {
+            height: 0.75rem;
+            border-radius: 999px;
+            background: #e7dcc7;
+            overflow: hidden;
+            margin: 0.6rem 0 0.35rem 0;
+        }
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #8b5e34 0%, #d48d35 45%, #1f5d46 100%);
+        }
+        .small-note {
+            color: #6b5d47;
+            font-size: 0.92rem;
+        }
+        .result-heading {
+            font-family: Georgia, "Times New Roman", serif;
+            color: #1f5d46;
+            margin: 0 0 0.35rem 0;
+        }
+        @media (max-width: 900px) {
+            .mini-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .hero-shell {
+                padding: 1.1rem 1rem;
+            }
         }
         </style>
         """,
@@ -171,6 +338,119 @@ def invalidate_stale_results(
         st.session_state.pop("last_simulation", None)
 
 
+def confidence_summary(confidence_percent: float) -> tuple[str, str]:
+    if confidence_percent >= 80:
+        return "High confidence", "The model sees this field pattern often and the signals mostly agree."
+    if confidence_percent >= 60:
+        return "Moderate confidence", "This is a reasonable shortlist, but local validation still matters."
+    return "Low confidence", "Use this as a first hint only and double-check the field conditions."
+
+
+def band_summary(feature: str, value: float, context: dict[str, Any]) -> str:
+    band = context.get("validation_bands", {}).get(feature, {})
+    typical_min = band.get("typical_min")
+    typical_max = band.get("typical_max")
+    if typical_min is None or typical_max is None:
+        return "No local comparison available yet."
+    if value < typical_min:
+        return "Below the typical local range."
+    if value > typical_max:
+        return "Above the typical local range."
+    return "Within the typical local range."
+
+
+def feature_story(feature: dict[str, Any]) -> str:
+    feature_key = str(feature.get("feature_key", "")).strip()
+    guide = FIELD_GUIDE.get(feature_key, {})
+    label = pretty(feature_key or str(feature.get("feature", "this factor")))
+    direction = "helped" if float(feature.get("impact", 0.0)) >= 0 else "held back"
+    why = guide.get("why")
+    if why:
+        return f"{label} {direction} the ranking. {why}"
+    return f"{label} {direction} the ranking."
+
+
+def render_hero(catalog: dict[str, Any], health: dict[str, Any], guidance_scope: dict[str, Any], live_weather_status: str) -> None:
+    coverage = catalog.get("coverage", {})
+    st.markdown(
+        f"""
+        <div class="hero-shell">
+            <div class="hero-title">Simple crop guidance for first-time users</div>
+            <p class="hero-copy">
+                This screen turns district-season history plus your field inputs into an explainable crop shortlist.
+                It is designed to be read slowly, with checks and plain-language help at every step.
+            </p>
+            <div class="mini-grid">
+                <div class="mini-card">
+                    <div class="mini-kicker">Districts</div>
+                    <div class="mini-value">{coverage.get('region_count', 0)}</div>
+                </div>
+                <div class="mini-card">
+                    <div class="mini-kicker">Crops</div>
+                    <div class="mini-value">{coverage.get('crop_count', 0)}</div>
+                </div>
+                <div class="mini-card">
+                    <div class="mini-kicker">Model mode</div>
+                    <div class="mini-value">{html.escape(pretty(str(health.get('mode', 'unknown'))))}</div>
+                </div>
+                <div class="mini-card">
+                    <div class="mini-kicker">Live weather</div>
+                    <div class="mini-value">{html.escape(pretty(str(live_weather_status)))}</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    scope_note = guidance_scope.get(
+        "product_note",
+        "This prototype uses historical district-month context from training data.",
+    )
+    st.markdown(
+        f'<div class="soft-note">{html.escape(scope_note)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_beginner_steps() -> None:
+    st.subheader("How to use this page")
+    step_columns = st.columns(len(BEGINNER_STEPS))
+    for index, step in enumerate(BEGINNER_STEPS, start=1):
+        with step_columns[index - 1]:
+            st.markdown(
+                f"""
+                <div class="guide-card">
+                    <div class="step-number">{index}</div>
+                    <div class="section-title">{html.escape(step['title'])}</div>
+                    <div class="small-note">{html.escape(step['body'])}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def render_field_guide(context: dict[str, Any]) -> None:
+    with st.expander("Need help with the field inputs?", expanded=False):
+        st.write("Use these plain-language descriptions if the form terms feel technical.")
+        for feature in PRIMARY_NUMERIC_FIELDS:
+            guide = FIELD_GUIDE.get(feature, {})
+            if not guide:
+                continue
+            st.markdown(f"**{FIELD_LABELS.get(feature, pretty(feature))}**")
+            st.write(guide.get("plain", ""))
+            st.caption(guide.get("why", ""))
+            default_value = context.get("feature_defaults", {}).get(feature)
+            if default_value not in (None, ""):
+                st.caption(f"Current district-month default: {default_value}")
+
+
+def render_result_guide() -> None:
+    with st.expander("How to read the result", expanded=False):
+        for title, body in RESULT_GUIDE:
+            st.markdown(f"**{title}**")
+            st.write(body)
+
+
 def render_prediction(prediction: dict[str, Any]) -> None:
     recommendations = prediction.get("recommendations", [])
     if not recommendations:
@@ -179,52 +459,151 @@ def render_prediction(prediction: dict[str, Any]) -> None:
 
     top_choice = recommendations[0]
     confidence = float(prediction.get("confidence", 0.0) or 0.0) * 100.0
+    confidence_title, confidence_copy = confidence_summary(confidence)
+    farmer_action = str(prediction.get("farmer_action", "")).strip()
+    guidance_scope = prediction.get("guidance_scope", {})
     st.markdown(
         f"""
         <div class="result-card">
-            <h3 style="margin:0 0 0.4rem 0; color:#1f5d46;">Top pattern match: {html.escape(pretty(top_choice.get("crop", "")))}</h3>
-            <p style="margin:0; color:#243830;">Confidence: {confidence:.1f}%</p>
+            <h3 class="result-heading">Top pattern match: {html.escape(pretty(top_choice.get("crop", "")))}</h3>
+            <p style="margin:0; color:#243830;"><strong>{html.escape(confidence_title)}</strong> - {confidence:.1f}%</p>
+            <div class="confidence-strip"><div class="confidence-fill" style="width:{max(0.0, min(confidence, 100.0)):.1f}%;"></div></div>
+            <p class="small-note" style="margin:0;">{html.escape(confidence_copy)}</p>
             <p style="margin:0.7rem 0 0 0; color:#243830;">{html.escape(prediction.get("farmer_message", prediction.get("explanation", "")))}</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    score_frame = pd.DataFrame(
-        [
-            {
-                "Crop": pretty(item.get("crop", "")),
-                "Suitability": round(float(item.get("score", 0.0)) * 100.0, 2),
-            }
-            for item in recommendations
-        ]
-    )
-    st.subheader("Crop ranking")
-    st.dataframe(score_frame, use_container_width=True, hide_index=True)
-
     top_features = prediction.get("top_features", [])
-    if top_features:
-        st.subheader("Why this crop is leading")
-        for feature in top_features:
-            direction = "supports" if float(feature.get("impact", 0.0)) >= 0 else "holds back"
-            st.write(f"- {pretty(feature.get('feature_key', ''))}: {direction} the ranking.")
-
     why_not = prediction.get("why_not", [])
-    if why_not:
-        st.subheader("Why others ranked lower")
-        for item in why_not:
-            st.write(f"- {pretty(item.get('crop', ''))}: {item.get('reason', '')}")
-
     warnings = prediction.get("warnings", [])
-    if warnings:
-        st.subheader("Input checks")
-        for item in warnings:
-            st.warning(item)
-
     localized_context = prediction.get("localized_context", {})
-    if localized_context:
-        with st.expander("Localized context used for autofill and validation"):
-            st.json(localized_context)
+    summary_tab, explain_tab, help_tab = st.tabs(["Result summary", "Why the app said this", "Help and glossary"])
+
+    with summary_tab:
+        highlight_columns = st.columns(3)
+        with highlight_columns[0]:
+            st.markdown(
+                f"""
+                <div class="insight-card">
+                    <div class="mini-kicker">Best next step</div>
+                    <div class="small-note">{html.escape(farmer_action or "Review the field inputs and compare the top two crops.")}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with highlight_columns[1]:
+            match_level = localized_context.get("match_level", "unknown")
+            st.markdown(
+                f"""
+                <div class="insight-card">
+                    <div class="mini-kicker">Context source</div>
+                    <div class="small-note">{html.escape(pretty(str(match_level)))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with highlight_columns[2]:
+            recommended_use = guidance_scope.get(
+                "recommended_use",
+                "Treat this as shortlist guidance, not a final planting instruction.",
+            )
+            st.markdown(
+                f"""
+                <div class="insight-card">
+                    <div class="mini-kicker">Use it like this</div>
+                    <div class="small-note">{html.escape(recommended_use)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        score_frame = pd.DataFrame(
+            [
+                {
+                    "Crop": pretty(item.get("crop", "")),
+                    "Suitability": round(float(item.get("score", 0.0)) * 100.0, 2),
+                }
+                for item in recommendations
+            ]
+        )
+        st.subheader("Crop ranking")
+        st.dataframe(score_frame, width="stretch", hide_index=True)
+
+        if why_not:
+            st.subheader("Why the others came lower")
+            for item in why_not:
+                st.markdown(
+                    f"""
+                    <div class="guide-card">
+                        <div class="section-title">{html.escape(pretty(item.get("crop", "")))}</div>
+                        <div class="small-note">{html.escape(item.get("reason", ""))}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        if warnings:
+            st.subheader("Important checks before deciding")
+            for item in warnings:
+                st.warning(item)
+
+    with explain_tab:
+        st.subheader("Simple explanation")
+        st.write(prediction.get("explanation", "No explanation was returned."))
+
+        if top_features:
+            st.subheader("What most influenced the result")
+            for feature in top_features:
+                st.markdown(
+                    f"""
+                    <div class="guide-card">
+                        <div class="section-title">{html.escape(pretty(feature.get("feature_key", "")))}</div>
+                        <div class="small-note">{html.escape(feature_story(feature))}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        confidence_breakdown = prediction.get("confidence_breakdown", {})
+        if confidence_breakdown:
+            st.subheader("Confidence breakdown")
+            breakdown_rows = []
+            for key, value in confidence_breakdown.items():
+                if key == "data_confidence":
+                    meaning = "How complete and realistic the entered field values look."
+                elif key == "geo_confidence":
+                    meaning = "How confidently the district mapping and local context were resolved."
+                else:
+                    meaning = "How much the learned model agrees with the agronomy rule check."
+                breakdown_rows.append(
+                    {
+                        "Part": pretty(key),
+                        "Score": round(float(value) * 100.0, 1),
+                        "Meaning": meaning,
+                    }
+                )
+            st.dataframe(pd.DataFrame(breakdown_rows), width="stretch", hide_index=True)
+
+        if localized_context:
+            with st.expander("See the district-month context behind this result", expanded=False):
+                st.json(localized_context)
+
+    with help_tab:
+        render_result_guide()
+        st.subheader("Quick glossary")
+        glossary_rows = []
+        for feature in ["temp_avg", "rain_total", "humidity_avg", "pH", "N", "P", "K", "irrigation_index", "rotation_score"]:
+            guide = FIELD_GUIDE.get(feature, {})
+            glossary_rows.append(
+                {
+                    "Term": FIELD_LABELS.get(feature, pretty(feature)),
+                    "Meaning": guide.get("plain", ""),
+                    "Why it matters": guide.get("why", ""),
+                }
+            )
+        st.dataframe(pd.DataFrame(glossary_rows), width="stretch", hide_index=True)
 
 
 def render_simulation(simulation: dict[str, Any]) -> None:
@@ -247,6 +626,9 @@ def render_simulation(simulation: dict[str, Any]) -> None:
             """,
             unsafe_allow_html=True,
         )
+        guide_copy = SCENARIO_GUIDE.get(scenario_name)
+        if guide_copy:
+            st.caption(guide_copy)
         comparison = payload.get("comparison", {})
         rows = comparison.get("rows", [])[:5]
         if rows:
@@ -261,7 +643,7 @@ def render_simulation(simulation: dict[str, Any]) -> None:
                     for row in rows
                 ]
             )
-            st.dataframe(table, use_container_width=True, hide_index=True)
+            st.dataframe(table, width="stretch", hide_index=True)
 
 
 def render_feedback_form(region: str, state: str, prediction: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -315,8 +697,6 @@ def main() -> None:
     )
     apply_styles()
 
-    st.title("Climate Crop Guidance")
-
     health, health_error = fetch_json("/health")
     catalog, catalog_error = fetch_json("/catalog")
     sanity, _ = fetch_json("/sanity")
@@ -329,21 +709,22 @@ def main() -> None:
 
     guidance_scope = catalog.get("guidance_scope", {})
     live_weather_status = catalog.get("temporal_context", {}).get("live_weather_status", "unknown")
-    scope_note = guidance_scope.get(
-        "product_note",
-        "This prototype uses historical district-month context from training data.",
-    )
-    st.markdown(
-        f'<div class="soft-note">{html.escape(scope_note)} '
-        f'Current live weather status: {html.escape(pretty(str(live_weather_status)))}.</div>',
-        unsafe_allow_html=True,
-    )
+    render_hero(catalog, health, guidance_scope, live_weather_status)
+    render_beginner_steps()
 
     left, right = st.columns([1.4, 1.0])
     with right:
-        st.caption(f"API: {API_BASE_URL}")
-        st.caption(f"Model version: {health.get('model_version', 'unknown')}")
-        st.caption(f"Mode: {health.get('mode', 'unknown')}")
+        st.markdown(
+            f"""
+            <div class="guide-card">
+                <div class="mini-kicker">System info</div>
+                <div class="small-note">API: {html.escape(API_BASE_URL)}</div>
+                <div class="small-note">Model version: {html.escape(str(health.get('model_version', 'unknown')))}</div>
+                <div class="small-note">Mode: {html.escape(str(health.get('mode', 'unknown')))}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         if sanity and sanity.get("sanity_checks", {}).get("available"):
             st.caption("Sanity checks: available")
 
@@ -429,6 +810,7 @@ def main() -> None:
         )
 
     st.subheader("Main inputs")
+    render_field_guide(context)
     input_columns = st.columns(2)
     numeric_values: dict[str, float] = {}
     for index, feature in enumerate(PRIMARY_NUMERIC_FIELDS):
@@ -441,7 +823,10 @@ def main() -> None:
             )
             band = context.get("validation_bands", {}).get(feature)
             if band:
-                st.caption(f"Typical local range: {band.get('typical_min')} to {band.get('typical_max')}")
+                st.caption(
+                    f"Typical local range: {band.get('typical_min')} to {band.get('typical_max')}."
+                )
+                st.caption(band_summary(feature, numeric_values[feature], context))
 
     st.subheader("Soil classes")
     class_columns = st.columns(4)
@@ -472,6 +857,7 @@ def main() -> None:
         "Demo scenarios",
         options=list(scenario_options.keys()),
         default=list(scenario_options.keys())[:2],
+        help="Use these to see whether the crop ranking changes under tougher weather conditions.",
     )
 
     payload = {
@@ -495,7 +881,7 @@ def main() -> None:
     invalidate_stale_results(base_signature, simulation_signature)
 
     predict_col, simulate_col = st.columns(2)
-    if predict_col.button("Get recommendation", use_container_width=True):
+    if predict_col.button("Get recommendation", width="stretch"):
         prediction, error = post_json("/predict", payload)
         if error:
             st.error(f"Prediction failed: {error}")
@@ -504,7 +890,7 @@ def main() -> None:
             st.session_state["last_payload"] = payload
             st.session_state["prediction_signature"] = base_signature
 
-    if simulate_col.button("Run demo scenarios", use_container_width=True):
+    if simulate_col.button("Run demo scenarios", width="stretch"):
         simulation_payload = {
             **payload,
             "scenario_names": selected_scenario_names,
