@@ -145,6 +145,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("supported_crops", payload)
         self.assertIn("feedback", payload)
         self.assertIn("temporal_context", payload)
+        self.assertIn("context_providers", payload)
         self.assertIn("guidance_scope", payload)
         self.assertIn("llm_support", payload)
         self.assertGreaterEqual(payload["coverage"]["crop_count"], 1)
@@ -198,6 +199,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("base_prediction", payload)
         self.assertIn("scenario_results", payload)
         self.assertIn("low_rainfall", payload["scenario_results"])
+        self.assertIn("scenario_adjustment", payload["scenario_results"]["low_rainfall"])
+        self.assertIn("rule_shift", payload["scenario_results"]["low_rainfall"])
 
     def test_predict_endpoint_with_valid_payload(self) -> None:
         response = self.client.post(

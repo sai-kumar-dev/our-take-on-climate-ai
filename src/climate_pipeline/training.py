@@ -18,6 +18,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, StandardScaler
 
+from .experiment_tracking import record_training_run
 from .utils import ensure_parent_dir, read_table, resolve_path, write_json
 
 CROP_LABEL_PREFIX = "crop_prob_"
@@ -130,6 +131,8 @@ DEFAULT_TRAINING_CONFIG: dict[str, Any] = {
         "explanation_feature_count": 6,
         "top_feature_count": 10,
         "prediction_summary_top_n": 3,
+        "slice_columns": ["state", "target_season", "target_month"],
+        "max_slice_groups": 8,
     },
     "calibration": {
         "enabled": True,
@@ -139,6 +142,7 @@ DEFAULT_TRAINING_CONFIG: dict[str, Any] = {
     },
     "inference": {
         "drift_zscore_threshold": 3.0,
+        "scenario_rule_blend_weight": 1.25,
         "warmup_enabled": True,
         "warmup_explainer_count": 2,
         "required_features": [
@@ -199,6 +203,13 @@ DEFAULT_TRAINING_CONFIG: dict[str, Any] = {
         "scaler_path": "scaler.pkl",
         "feature_config_path": "feature_config.json",
         "evaluation_report_path": "evaluation_report.json",
+    },
+    "governance": {
+        "registry_dir": "artifacts/registry",
+        "run_manifest_name": "run_manifest.json",
+        "model_card_name": "model_card.md",
+        "experiment_registry_name": "training_runs.jsonl",
+        "model_registry_name": "model_registry.jsonl",
     },
 }
 
@@ -522,8 +533,16 @@ def train_from_config(root_dir: Path, raw_config: dict[str, Any], config_path: P
         config_path=config_path,
         logger=logger,
     )
+    tracking_summary = record_training_run(
+        root_dir=root_dir,
+        config=config,
+        artifact_paths=artifact_paths,
+        evaluation_report=evaluation_report,
+        training_summary=training_summary,
+    )
     evaluation_report["artifacts"] = artifact_paths
     evaluation_report["model_metadata"] = artifact_paths["model_metadata"]
+    evaluation_report["tracking"] = tracking_summary
     write_json(Path(artifact_paths["evaluation_report"]), evaluation_report)
 
     logger.info(
@@ -616,6 +635,7 @@ def load_and_validate_dataset(root_dir: Path, config: dict[str, Any], logger: lo
         "categorical_features": categorical_features,
         "label_columns": label_columns,
         "region_count": int(frame[data_cfg["region_column"]].nunique()),
+        "state_count": int(frame["state"].nunique()) if "state" in frame.columns else 0,
         "time_count": int(frame[time_column].nunique()),
         "time_min": str(frame[time_column].min()),
         "time_max": str(frame[time_column].max()),
@@ -1051,6 +1071,8 @@ def build_evaluation_report(
     logger: logging.Logger,
 ) -> dict[str, Any]:
     evaluation_cfg = config["evaluation"]
+    slice_columns = list(dict.fromkeys(evaluation_cfg.get("slice_columns", [])))
+    max_slice_groups = int(evaluation_cfg.get("max_slice_groups", 8))
     metrics = {
         "train": calculate_distribution_metrics(y_train, train_predictions, evaluation_cfg["top_k"]),
         "test": calculate_distribution_metrics(y_test, test_predictions, evaluation_cfg["top_k"]),
@@ -1089,6 +1111,41 @@ def build_evaluation_report(
         top_n=int(evaluation_cfg["prediction_summary_top_n"]),
         feature_count=int(evaluation_cfg["explanation_feature_count"]),
     )
+    slice_metrics = {
+        "train": build_slice_metric_report(
+            frame=train_frame,
+            y_true=y_train,
+            y_pred=train_predictions,
+            group_columns=slice_columns,
+            top_k=int(evaluation_cfg["top_k"]),
+            max_groups=max_slice_groups,
+        ),
+        "test": build_slice_metric_report(
+            frame=test_frame,
+            y_true=y_test,
+            y_pred=test_predictions,
+            group_columns=slice_columns,
+            top_k=int(evaluation_cfg["top_k"]),
+            max_groups=max_slice_groups,
+        ),
+    }
+    if y_validation is not None and validation_predictions is not None and validation_frame is not None:
+        slice_metrics["validation"] = build_slice_metric_report(
+            frame=validation_frame,
+            y_true=y_validation,
+            y_pred=validation_predictions,
+            group_columns=slice_columns,
+            top_k=int(evaluation_cfg["top_k"]),
+            max_groups=max_slice_groups,
+        )
+    generalization_checks = build_generalization_report(
+        region_column=dataset.region_column,
+        train_frame=train_frame,
+        test_frame=test_frame,
+        y_test=y_test,
+        test_predictions=test_predictions,
+        top_k=int(evaluation_cfg["top_k"]),
+    )
     report = {
         "dataset_profile": dataset.profile,
         "warnings": dataset.warnings,
@@ -1106,16 +1163,125 @@ def build_evaluation_report(
         "training": training_summary,
         "calibration": training_summary.get("calibration", {}),
         "metrics": metrics,
+        "slice_metrics": slice_metrics,
+        "generalization_checks": generalization_checks,
         "stability_checks": stability,
         "feature_importance": feature_importance,
         "sanity_checks": sanity_checks,
         "explainability": explainability,
+        "target_definition": {
+            "target_type": "historical_crop_share_distribution",
+            "target_source": "district-time crop share labels derived from area or production",
+            "product_fit": "localized_pattern_guidance",
+            "limitations": [
+                "Target reflects historical cultivation patterns rather than direct agronomic outcomes.",
+                "Model outputs should be validated with local agronomy advice before planting decisions.",
+            ],
+        },
+        "research_protocol": {
+            "primary_split": "forward_chaining_time_split",
+            "primary_unit": "district-time rows",
+            "slice_columns": slice_columns,
+            "promotion_checks": [
+                "Review test metrics and calibration",
+                "Review geography generalization checks",
+                "Review slice metrics for states and seasons",
+                "Review sanity scenarios before promotion",
+            ],
+        },
         "reproducibility": {
             "random_state": model_bundle.random_state,
             "package_versions": collect_package_versions(),
         },
     }
     return report
+
+
+def build_slice_metric_report(
+    frame: pd.DataFrame,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    group_columns: list[str],
+    top_k: int,
+    max_groups: int,
+) -> dict[str, Any]:
+    if frame is None or frame.empty:
+        return {}
+
+    slice_report: dict[str, Any] = {}
+    for column in group_columns:
+        if column not in frame.columns:
+            continue
+        rows: list[dict[str, Any]] = []
+        for group_value, group_frame in frame.groupby(column, dropna=False, sort=True):
+            indices = group_frame.index.to_numpy(dtype=int)
+            if len(indices) == 0:
+                continue
+            metrics = calculate_distribution_metrics(y_true[indices], y_pred[indices], top_k)
+            rows.append(
+                {
+                    "group": "unknown" if pd.isna(group_value) else str(group_value),
+                    "rows": int(len(indices)),
+                    "top_1_accuracy": round(float(metrics["top_1_accuracy"]), 4),
+                    "top_k_accuracy": round(float(metrics["top_k_accuracy"]), 4),
+                    "cross_entropy": round(float(metrics["cross_entropy"]), 4),
+                    "kl_divergence_mean": round(float(metrics["kl_divergence_mean"]), 4),
+                }
+            )
+        rows.sort(key=lambda item: (-item["rows"], item["group"]))
+        slice_report[column] = rows[:max(1, max_groups)]
+    return slice_report
+
+
+def build_generalization_report(
+    region_column: str,
+    train_frame: pd.DataFrame,
+    test_frame: pd.DataFrame,
+    y_test: np.ndarray,
+    test_predictions: np.ndarray,
+    top_k: int,
+) -> dict[str, Any]:
+    report: dict[str, Any] = {}
+    if train_frame is None or train_frame.empty or test_frame is None or test_frame.empty:
+        return report
+
+    if region_column in train_frame.columns and region_column in test_frame.columns:
+        seen_regions = set(train_frame[region_column].astype("string").fillna("").tolist())
+        region_mask = test_frame[region_column].astype("string").fillna("").isin(seen_regions).to_numpy(dtype=bool)
+        report["region_overlap"] = summarize_overlap_metrics(region_mask, y_test, test_predictions, top_k)
+
+    if "state" in train_frame.columns and "state" in test_frame.columns:
+        seen_states = set(train_frame["state"].astype("string").fillna("").str.casefold().tolist())
+        state_mask = test_frame["state"].astype("string").fillna("").str.casefold().isin(seen_states).to_numpy(dtype=bool)
+        report["state_overlap"] = summarize_overlap_metrics(state_mask, y_test, test_predictions, top_k)
+
+    report["temporal_gap"] = {
+        "train_max_time": str(train_frame["time"].max()) if "time" in train_frame.columns else None,
+        "test_min_time": str(test_frame["time"].min()) if "time" in test_frame.columns else None,
+        "train_rows": int(len(train_frame)),
+        "test_rows": int(len(test_frame)),
+    }
+    return report
+
+
+def summarize_overlap_metrics(
+    seen_mask: np.ndarray,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    top_k: int,
+) -> dict[str, Any]:
+    seen_rows = int(np.sum(seen_mask))
+    unseen_rows = int(len(seen_mask) - seen_rows)
+    summary = {
+        "seen_rows": seen_rows,
+        "unseen_rows": unseen_rows,
+    }
+    if seen_rows:
+        summary["seen_metrics"] = calculate_distribution_metrics(y_true[seen_mask], y_pred[seen_mask], top_k)
+    if unseen_rows:
+        unseen_mask = ~seen_mask
+        summary["unseen_metrics"] = calculate_distribution_metrics(y_true[unseen_mask], y_pred[unseen_mask], top_k)
+    return summary
 
 
 def build_feature_importance_report(
@@ -1511,6 +1677,7 @@ def build_model_metadata(config: dict[str, Any], model_bundle: CropSuitabilityMo
         "features": feature_list,
         "training_date": timestamp.isoformat(),
         "model_type": model_type,
+        "target_type": "historical_crop_share_distribution",
         "mode": config["mode"],
         "sanity_mode": config["sanity_mode"],
         "random_state": model_bundle.random_state,

@@ -132,6 +132,12 @@ class TrainingPipelineTests(unittest.TestCase):
         self.assertIn("cross_entropy", test_metrics)
         self.assertIn("calibration", result["evaluation_report"])
         self.assertIn("temperature", result["evaluation_report"]["calibration"])
+        self.assertIn("slice_metrics", result["evaluation_report"])
+        self.assertIn("generalization_checks", result["evaluation_report"])
+        self.assertIn("tracking", result["evaluation_report"])
+        tracking = result["evaluation_report"]["tracking"]
+        self.assertTrue(Path(tracking["run_manifest"]).exists())
+        self.assertTrue(Path(tracking["model_card"]).exists())
 
     def test_strict_sanity_mode_fails_when_scenarios_fail(self) -> None:
         strict_config = merge_nested_dicts(

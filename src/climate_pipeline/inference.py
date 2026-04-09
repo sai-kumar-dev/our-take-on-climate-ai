@@ -20,7 +20,8 @@ from .training import (
     jensen_shannon_divergence,
     module_available,
 )
-from .runtime_context import LocalizedFeatureProvider, month_to_season
+from .context_providers import build_default_context_provider
+from .runtime_context import month_to_season
 from .utils import ensure_parent_dir, resolve_path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -171,7 +172,7 @@ class CropSuitabilityInferenceService:
         self.evaluation_report = self._load_json_artifact("evaluation_report.json")
         self.sanity_checks = self.evaluation_report.get("sanity_checks", {})
         dataset_path = self.feature_config.get("training_metadata", {}).get("dataset_profile", {}).get("dataset_path")
-        self.context_provider = LocalizedFeatureProvider(
+        self.context_provider = build_default_context_provider(
             dataset_path=Path(str(dataset_path)) if dataset_path else None,
             numeric_features=self.numeric_features,
             categorical_features=self.categorical_features,
@@ -888,6 +889,7 @@ class CropSuitabilityInferenceService:
                 for name, cfg in PRESET_SCENARIOS.items()
             ],
             "temporal_context": self.context_provider.get_temporal_catalog(),
+            "context_providers": self.context_provider.get_provider_status(),
         }
         return self._catalog_cache
 
