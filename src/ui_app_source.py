@@ -113,6 +113,7 @@ RESULT_GUIDE = [
     ("Confidence", "Higher confidence means the entered conditions look more familiar to the trained model and agree better with the rule checks."),
     ("Warnings", "Warnings tell you where the inputs look unusual, missing, or risky for the model."),
     ("Scenario check", "Scenarios show whether the ranking changes if rainfall or heat conditions become worse."),
+    ("AI guide", "The AI guide turns the result into a conversational answer, but it still works only from the current prediction data."),
 ]
 SCENARIO_GUIDE = {
     "low_rainfall": "Tests how the ranking changes if the period gets meaningfully drier.",
@@ -272,6 +273,13 @@ def apply_styles() -> None:
             color: #6b5d47;
             font-size: 0.92rem;
         }
+        .answer-shell {
+            background: rgba(255, 252, 246, 0.98);
+            border: 1px solid #d9ccb5;
+            border-radius: 20px;
+            padding: 1rem 1.1rem;
+            box-shadow: 0 12px 30px rgba(62, 46, 22, 0.06);
+        }
         .result-heading {
             font-family: Georgia, "Times New Roman", serif;
             color: #1f5d46;
@@ -334,6 +342,8 @@ def invalidate_stale_results(
     if previous_prediction_signature is not None and previous_prediction_signature != base_signature:
         st.session_state.pop("last_prediction", None)
         st.session_state.pop("last_payload", None)
+        st.session_state.pop("last_llm_guide", None)
+        st.session_state.pop("llm_guide_signature", None)
     if previous_simulation_signature is not None and previous_simulation_signature != simulation_signature:
         st.session_state.pop("last_simulation", None)
 
@@ -370,8 +380,15 @@ def feature_story(feature: dict[str, Any]) -> str:
     return f"{label} {direction} the ranking."
 
 
-def render_hero(catalog: dict[str, Any], health: dict[str, Any], guidance_scope: dict[str, Any], live_weather_status: str) -> None:
+def render_hero(
+    catalog: dict[str, Any],
+    health: dict[str, Any],
+    guidance_scope: dict[str, Any],
+    live_weather_status: str,
+    llm_support: dict[str, Any],
+) -> None:
     coverage = catalog.get("coverage", {})
+    ai_guide_status = "Ready" if llm_support.get("enabled") else "Setup needed"
     st.markdown(
         f"""
         <div class="hero-shell">
@@ -396,6 +413,10 @@ def render_hero(catalog: dict[str, Any], health: dict[str, Any], guidance_scope:
                 <div class="mini-card">
                     <div class="mini-kicker">Live weather</div>
                     <div class="mini-value">{html.escape(pretty(str(live_weather_status)))}</div>
+                </div>
+                <div class="mini-card">
+                    <div class="mini-kicker">AI guide</div>
+                    <div class="mini-value">{html.escape(ai_guide_status)}</div>
                 </div>
             </div>
         </div>
@@ -451,7 +472,99 @@ def render_result_guide() -> None:
             st.write(body)
 
 
-def render_prediction(prediction: dict[str, Any]) -> None:
+def render_ai_guide(
+    prediction: dict[str, Any],
+    llm_support: dict[str, Any],
+    payload: dict[str, Any],
+    region: str,
+    state: str,
+) -> None:
+    st.subheader("Ask the AI guide")
+    if not llm_support.get("enabled"):
+        st.info(
+            "The AI guide is optional and currently turned off. Add `GROQ_API_KEY` to enable Groq answers here."
+        )
+        return
+
+    supported_languages = llm_support.get("supported_languages", PREFERRED_LANGUAGES) or PREFERRED_LANGUAGES
+    default_language = supported_languages[0] if supported_languages else "English"
+    selected_language = st.selectbox(
+        "Answer language",
+        options=supported_languages,
+        index=0,
+        key="llm_guide_language",
+        help="This affects only the conversational AI answer, not the core model prediction.",
+    )
+    default_question = (
+        "Why is this crop ranked first, and what should I verify before making a decision?"
+    )
+    user_question = st.text_area(
+        "Question for the AI guide",
+        value=default_question if "llm_guide_question" not in st.session_state else st.session_state["llm_guide_question"],
+        key="llm_guide_question",
+        height=120,
+        help="Try asking what this means, why a crop came first, or what to check next on the field.",
+    )
+    request_signature = payload_signature(
+        {
+            "prediction_request_id": prediction.get("request_id"),
+            "question": user_question,
+            "language": selected_language or default_language,
+        }
+    )
+
+    if st.button("Ask AI guide", key="ask_ai_guide", width="stretch"):
+        with st.spinner("Preparing a simpler answer from the current prediction..."):
+            guide_response, error = post_json(
+                "/llm-guide",
+                {
+                    "prediction": prediction,
+                    "input_snapshot": payload,
+                    "preferred_language": selected_language or default_language,
+                    "user_question": user_question,
+                    "region": region,
+                    "state": state,
+                },
+            )
+        if error:
+            st.error(f"AI guide failed: {error}")
+        else:
+            st.session_state["last_llm_guide"] = guide_response
+            st.session_state["llm_guide_signature"] = request_signature
+
+    guide_response = st.session_state.get("last_llm_guide")
+    if not guide_response or st.session_state.get("llm_guide_signature") != request_signature:
+        st.caption(
+            "This answer will stay grounded in the current prediction, warnings, and district context. It does not pull live weather on its own."
+        )
+        return
+
+    st.markdown(
+        """
+        <div class="answer-shell">
+            <div class="mini-kicker">AI guide answer</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.write(guide_response.get("answer", "No answer returned."))
+    st.caption(guide_response.get("disclaimer", ""))
+    latency = guide_response.get("latency_ms")
+    provider = pretty(str(guide_response.get("provider", "groq")))
+    model_name = str(guide_response.get("model", "unknown"))
+    if latency is not None:
+        st.caption(f"Provider: {provider} | Model: {model_name} | Latency: {latency} ms")
+    else:
+        st.caption(f"Provider: {provider} | Model: {model_name}")
+
+
+def render_prediction(
+    prediction: dict[str, Any],
+    llm_support: dict[str, Any],
+    payload: dict[str, Any],
+    region: str,
+    state: str,
+) -> None:
     recommendations = prediction.get("recommendations", [])
     if not recommendations:
         st.warning("No recommendation was returned for this input.")
@@ -479,7 +592,9 @@ def render_prediction(prediction: dict[str, Any]) -> None:
     why_not = prediction.get("why_not", [])
     warnings = prediction.get("warnings", [])
     localized_context = prediction.get("localized_context", {})
-    summary_tab, explain_tab, help_tab = st.tabs(["Result summary", "Why the app said this", "Help and glossary"])
+    summary_tab, explain_tab, help_tab, ai_tab = st.tabs(
+        ["Result summary", "Why the app said this", "Help and glossary", "Ask AI guide"]
+    )
 
     with summary_tab:
         highlight_columns = st.columns(3)
@@ -605,6 +720,9 @@ def render_prediction(prediction: dict[str, Any]) -> None:
             )
         st.dataframe(pd.DataFrame(glossary_rows), width="stretch", hide_index=True)
 
+    with ai_tab:
+        render_ai_guide(prediction, llm_support, payload, region, state)
+
 
 def render_simulation(simulation: dict[str, Any]) -> None:
     scenario_results = simulation.get("scenario_results", {})
@@ -709,7 +827,8 @@ def main() -> None:
 
     guidance_scope = catalog.get("guidance_scope", {})
     live_weather_status = catalog.get("temporal_context", {}).get("live_weather_status", "unknown")
-    render_hero(catalog, health, guidance_scope, live_weather_status)
+    llm_support = catalog.get("llm_support", {})
+    render_hero(catalog, health, guidance_scope, live_weather_status, llm_support)
     render_beginner_steps()
 
     left, right = st.columns([1.4, 1.0])
@@ -905,7 +1024,13 @@ def main() -> None:
 
     prediction = st.session_state.get("last_prediction")
     if prediction:
-        render_prediction(prediction)
+        render_prediction(
+            prediction,
+            llm_support,
+            st.session_state.get("last_payload", payload),
+            selected_region,
+            selected_state,
+        )
         render_feedback_form(
             selected_region,
             selected_state,

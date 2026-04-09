@@ -21,6 +21,11 @@ from .climate_pipeline.inference import (
     CropSuitabilityInferenceService,
     InferenceValidationError,
 )
+from .climate_pipeline.llm_guide import (
+    GroqGuideClient,
+    LlmGuideNotConfiguredError,
+    LlmGuideUpstreamError,
+)
 from .climate_pipeline.utils import ensure_parent_dir
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -44,6 +49,8 @@ SUPPORTED_LANGUAGES = [
 ]
 DEFAULT_FEEDBACK_RATE_LIMIT_COUNT = 12
 DEFAULT_FEEDBACK_RATE_LIMIT_WINDOW_SECONDS = 900
+DEFAULT_LLM_GUIDE_RATE_LIMIT_COUNT = 8
+DEFAULT_LLM_GUIDE_RATE_LIMIT_WINDOW_SECONDS = 600
 
 
 class PredictRequest(BaseModel):
@@ -77,6 +84,15 @@ class FeedbackRequest(BaseModel):
     comment: str | None = None
     input_snapshot: dict[str, Any] | None = None
     prediction_snapshot: dict[str, Any] | None = None
+
+
+class LlmGuideRequest(BaseModel):
+    prediction: dict[str, Any] = Field(default_factory=dict)
+    input_snapshot: dict[str, Any] | None = None
+    preferred_language: str | None = None
+    user_question: str | None = Field(default=None, max_length=320)
+    region: str | None = None
+    state: str | None = None
 
 
 class SlidingWindowRateLimiter:
@@ -198,6 +214,11 @@ def get_feedback_store() -> FeedbackStore:
     return FeedbackStore(storage_dir=DEFAULT_FEEDBACK_DIR, signing_secret=signing_secret)
 
 
+@lru_cache(maxsize=1)
+def get_llm_guide_client() -> GroqGuideClient:
+    return GroqGuideClient.from_env()
+
+
 def build_guidance_scope() -> dict[str, Any]:
     return {
         "target_type": "historical_district_crop_pattern_guidance",
@@ -256,6 +277,28 @@ def get_feedback_rate_limit_window_seconds() -> int:
         return DEFAULT_FEEDBACK_RATE_LIMIT_WINDOW_SECONDS
 
 
+def get_llm_guide_rate_limit_count() -> int:
+    try:
+        return max(1, int(os.getenv("LLM_GUIDE_RATE_LIMIT_COUNT", DEFAULT_LLM_GUIDE_RATE_LIMIT_COUNT)))
+    except ValueError:
+        return DEFAULT_LLM_GUIDE_RATE_LIMIT_COUNT
+
+
+def get_llm_guide_rate_limit_window_seconds() -> int:
+    try:
+        return max(
+            1,
+            int(
+                os.getenv(
+                    "LLM_GUIDE_RATE_LIMIT_WINDOW_SECONDS",
+                    DEFAULT_LLM_GUIDE_RATE_LIMIT_WINDOW_SECONDS,
+                )
+            ),
+        )
+    except ValueError:
+        return DEFAULT_LLM_GUIDE_RATE_LIMIT_WINDOW_SECONDS
+
+
 def resolve_service_for_app(app: FastAPI) -> CropSuitabilityInferenceService:
     service = getattr(app.state, "service", None)
     if service is not None:
@@ -292,6 +335,24 @@ def resolve_feedback_store_for_app(app: FastAPI) -> FeedbackStore:
         return feedback_store
 
 
+def resolve_llm_guide_client_for_app(app: FastAPI) -> GroqGuideClient:
+    client = getattr(app.state, "llm_guide_client", None)
+    if client is not None:
+        return client
+
+    lock = getattr(app.state, "llm_guide_client_lock", None)
+    if lock is None:
+        lock = Lock()
+        app.state.llm_guide_client_lock = lock
+
+    with lock:
+        client = getattr(app.state, "llm_guide_client", None)
+        if client is None:
+            client = get_llm_guide_client()
+            app.state.llm_guide_client = client
+        return client
+
+
 def require_service(app: FastAPI) -> CropSuitabilityInferenceService:
     try:
         return resolve_service_for_app(app)
@@ -302,8 +363,11 @@ def require_service(app: FastAPI) -> CropSuitabilityInferenceService:
 def create_app(
     service: CropSuitabilityInferenceService | None = None,
     feedback_store: FeedbackStore | None = None,
+    llm_guide_client: GroqGuideClient | None = None,
     feedback_rate_limit_count: int | None = None,
     feedback_rate_limit_window_seconds: int | None = None,
+    llm_guide_rate_limit_count: int | None = None,
+    llm_guide_rate_limit_window_seconds: int | None = None,
 ) -> FastAPI:
     api_logger = configure_api_logger(ROOT_DIR)
     metrics = ApiMetricsTracker()
@@ -325,12 +389,18 @@ def create_app(
     app.state.service_lock = Lock()
     app.state.feedback_store = feedback_store
     app.state.feedback_store_lock = Lock()
+    app.state.llm_guide_client = llm_guide_client
+    app.state.llm_guide_client_lock = Lock()
     app.state.metrics = metrics
     app.state.api_logger = api_logger
     app.state.guidance_scope = build_guidance_scope()
     app.state.feedback_rate_limiter = SlidingWindowRateLimiter(
         feedback_rate_limit_count or get_feedback_rate_limit_count(),
         feedback_rate_limit_window_seconds or get_feedback_rate_limit_window_seconds(),
+    )
+    app.state.llm_guide_rate_limiter = SlidingWindowRateLimiter(
+        llm_guide_rate_limit_count or get_llm_guide_rate_limit_count(),
+        llm_guide_rate_limit_window_seconds or get_llm_guide_rate_limit_window_seconds(),
     )
 
     @app.middleware("http")
@@ -360,6 +430,7 @@ def create_app(
         try:
             service_instance = resolve_service_for_app(request.app)
         except Exception as exc:
+            llm_support = resolve_llm_guide_client_for_app(request.app).support_metadata()
             return JSONResponse(
                 status_code=503,
                 content={
@@ -367,8 +438,10 @@ def create_app(
                     "request_id": request.state.request_id,
                     "detail": f"Model service unavailable: {exc}",
                     "artifact_dir": str(resolve_default_artifact_dir() or ""),
+                    "llm_support": llm_support,
                 },
             )
+        llm_support = resolve_llm_guide_client_for_app(request.app).support_metadata()
         return {
             "status": "ok",
             "request_id": request.state.request_id,
@@ -376,6 +449,7 @@ def create_app(
             "mode": service_instance.mode,
             "sanity_mode": service_instance.sanity_mode,
             "artifact_dir": str(service_instance.artifact_dir),
+            "llm_support": llm_support,
         }
 
     @app.get("/sanity")
@@ -399,12 +473,14 @@ def create_app(
     def catalog(request: Request) -> dict[str, Any]:
         service_instance = require_service(request.app)
         feedback_store_instance = resolve_feedback_store_for_app(request.app)
+        llm_support = resolve_llm_guide_client_for_app(request.app).support_metadata()
         catalog_payload = service_instance.get_catalog()
         return {
             "status": "ok",
             "request_id": request.state.request_id,
             **catalog_payload,
             "feedback": feedback_store_instance.get_storage_info(),
+            "llm_support": llm_support,
             "language_support": {
                 "current": ["English"],
                 "planned": SUPPORTED_LANGUAGES[1:],
@@ -496,6 +572,51 @@ def create_app(
             "review_status": "pending_human_review" if consent_for_training else "not_requested",
             "eligible_for_training": False,
             **submitted,
+        }
+
+    @app.post("/llm-guide")
+    def llm_guide(request: Request, payload: LlmGuideRequest) -> dict[str, Any]:
+        if not payload.prediction or not payload.prediction.get("recommendations"):
+            raise HTTPException(
+                status_code=422,
+                detail="Provide a prediction payload with at least one recommendation.",
+            )
+
+        client_host = request.client.host if request.client and request.client.host else "unknown"
+        rate_limit_key = f"llm-guide:{client_host}"
+        if not request.app.state.llm_guide_rate_limiter.allow(rate_limit_key):
+            raise HTTPException(
+                status_code=429,
+                detail="AI guide rate limit reached for this client. Please wait before asking again.",
+            )
+
+        llm_client = resolve_llm_guide_client_for_app(request.app)
+        if hasattr(llm_client, "is_enabled") and not bool(llm_client.is_enabled()):
+            raise HTTPException(
+                status_code=503,
+                detail="Groq AI guide is not configured. Set GROQ_API_KEY to enable it.",
+            )
+        started = perf_counter()
+        try:
+            result = llm_client.generate_answer(
+                prediction=payload.prediction,
+                input_snapshot=payload.input_snapshot,
+                preferred_language=payload.preferred_language,
+                user_question=payload.user_question,
+                region=payload.region,
+                state=payload.state,
+            )
+        except LlmGuideNotConfiguredError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except LlmGuideUpstreamError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        elapsed_ms = round((perf_counter() - started) * 1000.0, 2)
+        return {
+            "status": "ok",
+            "request_id": request.state.request_id,
+            "latency_ms": elapsed_ms,
+            **result,
         }
 
     return app

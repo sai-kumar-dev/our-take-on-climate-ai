@@ -16,7 +16,53 @@ if str(SRC_DIR) not in sys.path:
 from app import create_app  # noqa: E402
 from climate_pipeline.feedback import FeedbackStore  # noqa: E402
 from climate_pipeline.inference import CropSuitabilityInferenceService  # noqa: E402
+from climate_pipeline.llm_guide import LlmGuideNotConfiguredError  # noqa: E402
 from climate_pipeline.training import DEFAULT_TRAINING_CONFIG, merge_nested_dicts, train_from_config  # noqa: E402
+
+
+class FakeLlmGuideClient:
+    def __init__(self, enabled: bool = True) -> None:
+        self.enabled = enabled
+
+    def is_enabled(self) -> bool:
+        return self.enabled
+
+    def support_metadata(self) -> dict[str, object]:
+        return {
+            "enabled": self.enabled,
+            "provider": "groq",
+            "model": "fake-groq-model",
+            "interactive_guide": True,
+            "supported_languages": ["English", "Hindi"],
+        }
+
+    def generate_answer(
+        self,
+        *,
+        prediction: dict[str, object],
+        input_snapshot: dict[str, object] | None = None,
+        preferred_language: str | None = None,
+        user_question: str | None = None,
+        region: str | None = None,
+        state: str | None = None,
+    ) -> dict[str, object]:
+        if not self.enabled:
+            raise LlmGuideNotConfiguredError("LLM guide disabled")
+        top_crop = "unknown"
+        recommendations = prediction.get("recommendations", [])
+        if isinstance(recommendations, list) and recommendations:
+            top_crop = str(recommendations[0].get("crop", "unknown"))
+        return {
+            "provider": "groq",
+            "model": "fake-groq-model",
+            "source": "groq_responses_api",
+            "preferred_language": preferred_language or "English",
+            "answer": (
+                f"{preferred_language or 'English'} answer for {region or 'unknown region'}: "
+                f"{top_crop} is the current shortlist. {user_question or ''}".strip()
+            ),
+            "disclaimer": "Test disclaimer",
+        }
 
 
 class ApiTests(unittest.TestCase):
@@ -59,7 +105,13 @@ class ApiTests(unittest.TestCase):
         train_from_config(ROOT_DIR, config)
         service = CropSuitabilityInferenceService.from_artifact_dir(cls.artifact_dir, root_dir=ROOT_DIR)
         feedback_store = FeedbackStore(storage_dir=cls.feedback_dir, signing_secret="test-secret")
-        cls.client = TestClient(create_app(service=service, feedback_store=feedback_store))
+        cls.client = TestClient(
+            create_app(
+                service=service,
+                feedback_store=feedback_store,
+                llm_guide_client=FakeLlmGuideClient(enabled=True),
+            )
+        )
 
     def test_health_endpoint(self) -> None:
         response = self.client.get("/health")
@@ -67,6 +119,7 @@ class ApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "ok")
         self.assertIn("request_id", payload)
+        self.assertIn("llm_support", payload)
 
     def test_sanity_endpoint(self) -> None:
         response = self.client.get("/sanity")
@@ -93,6 +146,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("feedback", payload)
         self.assertIn("temporal_context", payload)
         self.assertIn("guidance_scope", payload)
+        self.assertIn("llm_support", payload)
         self.assertGreaterEqual(payload["coverage"]["crop_count"], 1)
 
     def test_context_endpoint(self) -> None:
@@ -295,6 +349,60 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(first_response.status_code, 200)
         second_response = rate_limited_client.post("/feedback", json={**payload, "comment": "Second submission"})
         self.assertEqual(second_response.status_code, 429)
+
+    def test_llm_guide_endpoint_returns_answer(self) -> None:
+        response = self.client.post(
+            "/llm-guide",
+            json={
+                "prediction": {
+                    "recommendations": [{"crop": "sugarcane", "score": 0.82}],
+                    "confidence": 0.76,
+                    "explanation": "Higher pH favored sugarcane.",
+                },
+                "input_snapshot": {
+                    "features": {
+                        "temp_avg": 28.0,
+                        "rain_total": 120.0,
+                    }
+                },
+                "preferred_language": "Hindi",
+                "user_question": "Why did this crop come first?",
+                "region": "Pune",
+                "state": "Maharashtra",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["provider"], "groq")
+        self.assertIn("answer", payload)
+        self.assertIn("Hindi", payload["answer"])
+
+    def test_llm_guide_endpoint_requires_prediction(self) -> None:
+        response = self.client.post("/llm-guide", json={"prediction": {}})
+        self.assertEqual(response.status_code, 422)
+
+    def test_llm_guide_endpoint_returns_503_when_disabled(self) -> None:
+        service = CropSuitabilityInferenceService.from_artifact_dir(self.artifact_dir, root_dir=ROOT_DIR)
+        feedback_store = FeedbackStore(storage_dir=self.feedback_dir / "llm_disabled_store", signing_secret="test-secret")
+        disabled_client = TestClient(
+            create_app(
+                service=service,
+                feedback_store=feedback_store,
+                llm_guide_client=FakeLlmGuideClient(enabled=False),
+            )
+        )
+        response = disabled_client.post(
+            "/llm-guide",
+            json={
+                "prediction": {
+                    "recommendations": [{"crop": "sugarcane", "score": 0.82}],
+                },
+                "preferred_language": "English",
+                "region": "Pune",
+            },
+        )
+        self.assertEqual(response.status_code, 503)
 
 
 if __name__ == "__main__":
