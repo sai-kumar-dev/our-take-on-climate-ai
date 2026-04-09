@@ -1,0 +1,66 @@
+{
+  "target_time_level": "monthly",
+  "dry_spell_rain_threshold_mm": 1.0,
+  "soil_class_bins": {
+    "N": [280, 560],
+    "P": [10, 25],
+    "K": [110, 280]
+  },
+  "region_aliases": {
+    "karnataka|bengaluru urban": "bengaluru urban",
+    "karnataka|bangalore urban": "bengaluru urban"
+  },
+  "context_defaults": {
+    "irrigation_index": 0.0,
+    "rotation_score": 0.5,
+    "fertility_class": "medium"
+  },
+  "datasets": {
+    "climate": {
+      "path": "data/raw/climate/climate.csv",
+      "spatial_level": "district",
+      "dayfirst": false,
+      "columns": {
+        "region": "district",
+        "state": "state",
+        "date": "date",
+        "temperature": "avg_temp_c",
+        "rainfall": "rainfall_mm",
+        "humidity": "humidity_pct",
+        "max_temperature": "max_temp_c"
+      }
+    },
+    "soil": {
+      "path": "data/raw/soil/soil.csv",
+      "spatial_level": "district",
+      "columns": {
+        "region": "district",
+        "state": "state",
+        "date": "sample_date",
+        "ph": "ph",
+        "n": "nitrogen",
+        "p": "phosphorus",
+        "k": "potassium"
+      }
+    },
+    "crop": {
+      "path": "data/raw/crop/crop.csv",
+      "spatial_level": "district",
+      "columns": {
+        "region": "district",
+        "state": "state",
+        "year": "year",
+        "month": "month",
+        "crop": "crop_name",
+        "area": "area_ha",
+        "production": "production_tonnes"
+      }
+    }
+  },
+  "outputs": {
+    "inspection_report": "reports/inspection_report.json",
+    "validation_report": "reports/validation_report.json",
+    "final_dataset": "data/processed/final_ml_dataset.csv",
+    "summary_stats": "reports/summary_stats.csv"
+  }
+}

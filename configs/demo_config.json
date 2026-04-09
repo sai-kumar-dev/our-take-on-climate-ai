@@ -1,0 +1,61 @@
+{
+  "target_time_level": "monthly",
+  "dry_spell_rain_threshold_mm": 1.0,
+  "soil_class_bins": {
+    "N": [280, 560],
+    "P": [10, 25],
+    "K": [110, 280]
+  },
+  "region_aliases": {},
+  "context_defaults": {
+    "irrigation_index": 0.0,
+    "rotation_score": 0.5,
+    "fertility_class": "medium"
+  },
+  "datasets": {
+    "climate": {
+      "path": "data/raw/demo/climate_daily.csv",
+      "spatial_level": "district",
+      "columns": {
+        "region": "district",
+        "state": "state",
+        "date": "date",
+        "temperature": "t_mean_c",
+        "rainfall": "rain_mm",
+        "humidity": "humidity_pct",
+        "max_temperature": "t_max_c"
+      }
+    },
+    "soil": {
+      "path": "data/raw/demo/soil_samples.csv",
+      "spatial_level": "district",
+      "columns": {
+        "region": "district",
+        "state": "state",
+        "date": "sample_date",
+        "ph": "ph",
+        "n": "n_kg_ha",
+        "p": "p_kg_ha",
+        "k": "k_kg_ha"
+      }
+    },
+    "crop": {
+      "path": "data/raw/demo/crop_monthly.csv",
+      "spatial_level": "district",
+      "columns": {
+        "region": "district",
+        "state": "state",
+        "year": "year",
+        "month": "month",
+        "crop": "crop",
+        "area": "area_ha"
+      }
+    }
+  },
+  "outputs": {
+    "inspection_report": "reports/inspection_report.json",
+    "validation_report": "reports/validation_report.json",
+    "final_dataset": "data/processed/final_ml_dataset.csv",
+    "summary_stats": "reports/summary_stats.csv"
+  }
+}

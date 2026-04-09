@@ -1,0 +1,60 @@
+{
+  "mode": "demo",
+  "sanity_mode": "warn",
+  "data": {
+    "dataset_path": "data/processed/final_ml_dataset.csv"
+  },
+  "split": {
+    "test_periods": 1,
+    "validation_periods": 1,
+    "min_train_periods": 1
+  },
+  "model": {
+    "backend": "xgboost",
+    "allow_backend_fallback": false,
+    "random_state": 42,
+    "xgboost_params": {
+      "n_estimators": 50,
+      "learning_rate": 0.1,
+      "max_depth": 3,
+      "min_child_weight": 1,
+      "subsample": 1.0,
+      "colsample_bytree": 1.0,
+      "reg_alpha": 0.0,
+      "reg_lambda": 1.0,
+      "tree_method": "hist",
+      "n_jobs": 1,
+      "verbosity": 0,
+      "objective": "reg:squarederror",
+      "eval_metric": "rmse"
+    }
+  },
+  "calibration": {
+    "enabled": true,
+    "method": "temperature_scaling",
+    "preferred_split": "validation",
+    "temperature_grid": [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0]
+  },
+  "inference": {
+    "drift_zscore_threshold": 3.0,
+    "warmup_enabled": true,
+    "warmup_explainer_count": 2,
+    "required_features": [
+      "temp_avg",
+      "rain_total",
+      "humidity_avg",
+      "max_temp",
+      "pH",
+      "N",
+      "P",
+      "K",
+      "N_class",
+      "P_class",
+      "K_class",
+      "fertility_class"
+    ]
+  },
+  "artifacts": {
+    "output_dir": "artifacts/demo_training"
+  }
+}
