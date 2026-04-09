@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 from datetime import datetime
 from typing import Any
 
@@ -389,6 +390,98 @@ def feature_story(feature: dict[str, Any]) -> str:
     return f"{label} {direction} the ranking."
 
 
+def clean_llm_text(text: str) -> str:
+    cleaned = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    cleaned = re.sub(r"[*_`#>-]+", " ", cleaned)
+    cleaned = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1", cleaned)
+    cleaned = re.sub(r"\s+\n", "\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    return cleaned.strip()
+
+
+def split_llm_sections(text: str) -> list[tuple[str, str]]:
+    cleaned = clean_llm_text(text)
+    if not cleaned:
+        return []
+
+    heading_map = {
+        "what this means": "What this means",
+        "why it came first": "Why it came first",
+        "what to check next": "What to check next",
+        "what this means:": "What this means",
+        "why it came first:": "Why it came first",
+        "what to check next:": "What to check next",
+    }
+    sections: list[tuple[str, str]] = []
+    current_title: str | None = None
+    current_lines: list[str] = []
+
+    for raw_line in cleaned.splitlines():
+        line = raw_line.strip(" -:\t")
+        if not line:
+            if current_title and current_lines:
+                current_lines.append("")
+            continue
+        normalized = line.lower().strip()
+        normalized = re.sub(r"^\d+[.)]\s*", "", normalized)
+        if normalized in heading_map:
+            if current_title and current_lines:
+                body = " ".join(part for part in current_lines if part).strip()
+                if body:
+                    sections.append((current_title, body))
+            current_title = heading_map[normalized]
+            current_lines = []
+            continue
+        if current_title is None:
+            current_title = "Simple explanation"
+        current_lines.append(line)
+
+    if current_title and current_lines:
+        body = " ".join(part for part in current_lines if part).strip()
+        if body:
+            sections.append((current_title, body))
+
+    if sections:
+        return sections
+
+    paragraphs = [part.strip() for part in cleaned.split("\n\n") if part.strip()]
+    if not paragraphs:
+        return []
+    if len(paragraphs) == 1:
+        return [("Simple explanation", paragraphs[0])]
+    fallback_titles = ["What this means", "Why it came first", "What to check next"]
+    return [
+        (fallback_titles[index] if index < len(fallback_titles) else f"Part {index + 1}", paragraph)
+        for index, paragraph in enumerate(paragraphs[:3])
+    ]
+
+
+def render_llm_answer_sections(answer: str, kicker: str) -> None:
+    sections = split_llm_sections(answer)
+    if not sections:
+        st.info("No explanation was returned.")
+        return
+    st.markdown(
+        f"""
+        <div class="answer-shell">
+            <div class="mini-kicker">{html.escape(kicker)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    for title, body in sections:
+        st.markdown(
+            f"""
+            <div class="guide-card">
+                <div class="section-title">{html.escape(title)}</div>
+                <div class="small-note">{html.escape(body)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
 def render_hero(
     catalog: dict[str, Any],
     health: dict[str, Any],
@@ -515,7 +608,10 @@ def render_layman_explanation(
         st.info(
             "Groq explanation is not enabled yet, so the app is showing the built-in rule explanation below."
         )
-        st.write(prediction.get("farmer_message", prediction.get("explanation", "No explanation was returned.")))
+        render_llm_answer_sections(
+            prediction.get("farmer_message", prediction.get("explanation", "No explanation was returned.")),
+            "Built-in explanation",
+        )
         return
 
     supported_languages = llm_support.get("supported_languages", PREFERRED_LANGUAGES) or PREFERRED_LANGUAGES
@@ -546,15 +642,7 @@ def render_layman_explanation(
 
     guide_response = st.session_state.get("last_layman_explanation")
     if guide_response and st.session_state.get("layman_explanation_signature") == explanation_signature:
-        st.markdown(
-            """
-            <div class="answer-shell">
-                <div class="mini-kicker">Layman explanation</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.write(guide_response.get("answer", "No explanation returned."))
+        render_llm_answer_sections(guide_response.get("answer", "No explanation returned."), "Layman explanation")
         st.caption(guide_response.get("disclaimer", ""))
         return
 
@@ -627,15 +715,7 @@ def render_ai_guide(
         )
         return
 
-    st.markdown(
-        """
-        <div class="answer-shell">
-            <div class="mini-kicker">AI guide answer</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.write(guide_response.get("answer", "No answer returned."))
+    render_llm_answer_sections(guide_response.get("answer", "No answer returned."), "AI guide answer")
     st.caption(guide_response.get("disclaimer", ""))
     latency = guide_response.get("latency_ms")
     provider = pretty(str(guide_response.get("provider", "groq")))

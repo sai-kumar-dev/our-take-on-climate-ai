@@ -33,11 +33,25 @@ class GroqGuideClient:
         timeout_seconds: float | None = None,
         session: requests.Session | Any | None = None,
     ) -> None:
-        self.api_key = (api_key or os.getenv("GROQ_API_KEY") or "").strip()
-        self.model = (model or os.getenv("GROQ_MODEL") or DEFAULT_GROQ_MODEL).strip()
-        self.base_url = (base_url or os.getenv("GROQ_BASE_URL") or DEFAULT_GROQ_BASE_URL).rstrip("/")
+        self.api_key = (
+            str(api_key).strip()
+            if api_key is not None
+            else (os.getenv("GROQ_API_KEY") or "").strip()
+        )
+        self.model = (
+            str(model).strip()
+            if model is not None
+            else (os.getenv("GROQ_MODEL") or DEFAULT_GROQ_MODEL).strip()
+        )
+        self.base_url = (
+            str(base_url).rstrip("/")
+            if base_url is not None
+            else (os.getenv("GROQ_BASE_URL") or DEFAULT_GROQ_BASE_URL).rstrip("/")
+        )
         self.timeout_seconds = float(
-            timeout_seconds or os.getenv("GROQ_TIMEOUT_SECONDS") or DEFAULT_TIMEOUT_SECONDS
+            timeout_seconds
+            if timeout_seconds is not None
+            else (os.getenv("GROQ_TIMEOUT_SECONDS") or DEFAULT_TIMEOUT_SECONDS)
         )
         self.session = session or requests.Session()
 
@@ -94,6 +108,7 @@ class GroqGuideClient:
                 "Explain terms in layman language. Prefer three short sections with simple headings: "
                 "'What this means', 'Why it came first', and 'What to check next'. "
                 "If there are warnings, mention them in plain words. "
+                "Do not use markdown, bold text, hashes, bullet symbols, or tables. "
                 "If a non-English language is requested, answer fully in that language when possible. "
                 "Otherwise, use simple English."
             ),
