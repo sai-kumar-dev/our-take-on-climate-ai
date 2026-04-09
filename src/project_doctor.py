@@ -32,14 +32,22 @@ def check_paths() -> tuple[list[CheckResult], bool, bool]:
         ("API entrypoint", ROOT_DIR / "src" / "app_api_entry.py"),
         ("UI entrypoint", ROOT_DIR / "src" / "ui_app_source.py"),
         ("Launcher", ROOT_DIR / "run_all.bat"),
+        ("Train CLI", ROOT_DIR / "train_model.py"),
+        ("Pipeline CLI", ROOT_DIR / "run_pipeline.py"),
         ("Production model", ROOT_DIR / "artifacts" / "data_new_training" / "trained_model.pkl"),
         ("Feature config", ROOT_DIR / "artifacts" / "data_new_training" / "feature_config.json"),
         ("Scaler", ROOT_DIR / "artifacts" / "data_new_training" / "scaler.pkl"),
     ]
     training_files = [
         ("Training config", ROOT_DIR / "configs" / "training_data_new.json"),
+        ("Pipeline config", ROOT_DIR / "configs" / "data_new_config.json"),
         ("Test dataset", ROOT_DIR / "data" / "processed" / "final_ml_dataset.csv"),
         ("Training dataset", ROOT_DIR / "data" / "processed" / "data_new_final_ml_dataset.csv"),
+    ]
+    packaging_files = [
+        ("Dockerfile", ROOT_DIR / "Dockerfile"),
+        ("Compose file", ROOT_DIR / "docker-compose.yml"),
+        ("CI workflow", ROOT_DIR / ".github" / "workflows" / "ci.yml"),
     ]
 
     results: list[CheckResult] = []
@@ -55,6 +63,10 @@ def check_paths() -> tuple[list[CheckResult], bool, bool]:
         exists = path.exists()
         results.append(CheckResult(label, "ok" if exists else "missing", str(path)))
         ready_to_retrain = ready_to_retrain and exists
+
+    for label, path in packaging_files:
+        exists = path.exists()
+        results.append(CheckResult(label, "ok" if exists else "missing", str(path)))
 
     return results, ready_to_run, ready_to_retrain
 
