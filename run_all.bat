@@ -359,11 +359,10 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if exist "%APP_ROOT%\artifacts\data_new_training\trained_model.pkl" (
-    echo [ok] Found production model artifact.
-)
-if not exist "%APP_ROOT%\artifacts\data_new_training\trained_model.pkl" (
-    echo [warning] Production model artifact is missing.
+echo [info] Running project doctor...
+"%VENV_PYTHON%" "%APP_ROOT%\src\project_doctor.py"
+if errorlevel 1 (
+    echo [warning] Project doctor found blocking issues for a clean local run.
 )
 
 call :status_stack
