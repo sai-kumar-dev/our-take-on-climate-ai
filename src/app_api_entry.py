@@ -72,6 +72,10 @@ class SimulateRequest(PredictRequest):
     scenario_names: list[str] | None = None
 
 
+class ScenarioExplainRequest(PredictRequest):
+    scenario_name: str = Field(..., min_length=1)
+
+
 class FeedbackRequest(BaseModel):
     request_id: str | None = None
     region: str = Field(..., min_length=1)
@@ -552,6 +556,28 @@ def create_app(
             "prediction_time_ms": elapsed_ms,
             "guidance_scope": request.app.state.guidance_scope,
             **simulation,
+        }
+
+    @app.post("/scenario-explain")
+    def scenario_explain(request: Request, payload: ScenarioExplainRequest) -> dict[str, Any]:
+        if not payload.features:
+            raise HTTPException(status_code=422, detail="Provide at least one feature value.")
+        started = perf_counter()
+        service_instance = require_service(request.app)
+        try:
+            explanation_payload = service_instance.explain_scenario(
+                model_dump(payload),
+                scenario_name=payload.scenario_name,
+            )
+        except InferenceValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        elapsed_ms = round((perf_counter() - started) * 1000.0, 2)
+        return {
+            "status": "ok",
+            "request_id": request.state.request_id,
+            "latency_ms": elapsed_ms,
+            "guidance_scope": request.app.state.guidance_scope,
+            **explanation_payload,
         }
 
     @app.post("/feedback")

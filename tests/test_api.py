@@ -202,6 +202,53 @@ class ApiTests(unittest.TestCase):
         self.assertIn("scenario_adjustment", payload["scenario_results"]["low_rainfall"])
         self.assertIn("rule_shift", payload["scenario_results"]["low_rainfall"])
 
+    def test_scenario_explain_endpoint_returns_structured_payload(self) -> None:
+        mocked_explanation = {
+            "scenario_summary": "Scenario summary.",
+            "environmental_change": "Environmental change.",
+            "crop_response_analysis": "Crop response.",
+            "ranking_changes": "Ranking changes.",
+            "key_drivers": ["rainfall"],
+            "stability_assessment": "Stable.",
+            "confidence_note": "Grounded.",
+        }
+        with mock.patch(
+            "climate_pipeline.inference.generate_scenario_explanation",
+            return_value=mocked_explanation,
+        ):
+            response = self.client.post(
+                "/scenario-explain",
+                json={
+                    "region": "Pune",
+                    "features": {
+                        "temp_avg": 29.0,
+                        "rain_total": 35.0,
+                        "humidity_avg": 70.0,
+                        "max_temp": 34.0,
+                        "max_temp_3d": 34.0,
+                        "rain_lag_14": 30.0,
+                        "pH": 6.7,
+                        "N": 340.0,
+                        "P": 18.0,
+                        "K": 220.0,
+                        "N_class": "medium",
+                        "P_class": "medium",
+                        "K_class": "medium",
+                        "fertility_class": "medium"
+                    },
+                    "irrigation_index": 0.5,
+                    "rotation_score": 0.6,
+                    "scenario_name": "low_rainfall",
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["scenario_name"], "low_rainfall")
+        self.assertIn("scenario_result", payload)
+        self.assertIn("scenario_explanation", payload["scenario_result"])
+        self.assertIn("scenario_explanation_ui", payload["scenario_result"])
+
     def test_predict_endpoint_with_valid_payload(self) -> None:
         response = self.client.post(
             "/predict",

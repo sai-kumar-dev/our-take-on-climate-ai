@@ -356,6 +356,7 @@ def invalidate_stale_results(
         st.session_state.pop("layman_explanation_signature", None)
     if previous_simulation_signature is not None and previous_simulation_signature != simulation_signature:
         st.session_state.pop("last_simulation", None)
+        st.session_state.pop("scenario_explanation_cache", None)
 
 
 def confidence_summary(confidence_percent: float) -> tuple[str, str]:
@@ -480,6 +481,219 @@ def render_llm_answer_sections(answer: str, kicker: str) -> None:
             """,
             unsafe_allow_html=True,
         )
+
+
+def scenario_explanation_cache_key(base_payload: dict[str, Any], scenario_name: str) -> str:
+    return payload_signature({"scenario_name": scenario_name, **base_payload})
+
+
+def render_scenario_explanation_content(explanation_response: dict[str, Any]) -> None:
+    scenario_result = explanation_response.get("scenario_result", {})
+    ui_payload = scenario_result.get("scenario_explanation_ui", {})
+    raw_explanation = scenario_result.get("scenario_explanation", {})
+    feature_changes = scenario_result.get("feature_changes", {})
+    sections = ui_payload.get("sections", [])
+
+    if feature_changes:
+        st.caption(
+            "Scenario inputs changed: "
+            + ", ".join(f"{pretty(key)} {value}" for key, value in feature_changes.items())
+        )
+
+    if not sections:
+        st.info("No structured scenario explanation is available yet.")
+        return
+
+    for section in sections:
+        heading = str(section.get("heading", "")).strip()
+        content = str(section.get("content", "")).strip()
+        if not heading or not content:
+            continue
+        st.markdown(
+            f"""
+            <div class="guide-card">
+                <div class="section-title">{html.escape(heading)}</div>
+                <div class="small-note">{html.escape(content)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    key_drivers = raw_explanation.get("key_drivers", [])
+    if key_drivers:
+        st.caption("Key drivers: " + ", ".join(pretty(str(item)) for item in key_drivers))
+
+
+def render_simple_scenario_explanation(explanation_response: dict[str, Any]) -> None:
+    scenario_result = explanation_response.get("scenario_result", {})
+    comparison = scenario_result.get("comparison", {})
+    feature_changes = scenario_result.get("feature_changes", {})
+    top_before = pretty(str(comparison.get("top_crop_before", "")))
+    top_after = pretty(str(comparison.get("top_crop_after", "")))
+    effect_strength = pretty(str(comparison.get("effect_strength", "small")))
+    largest_score_shift = comparison.get("largest_score_shift") or {}
+    largest_rank_shift = comparison.get("largest_rank_shift") or {}
+
+    if feature_changes:
+        change_parts = []
+        for key, value in feature_changes.items():
+            feature_name = pretty(str(key))
+            lowered_key = str(key).lower()
+            if "temp" in lowered_key or "heat" in lowered_key:
+                change_parts.append(f"{feature_name} becomes {value}")
+            elif "rain" in lowered_key or "humidity" in lowered_key:
+                change_parts.append(f"{feature_name} shifts to {value}")
+            elif "irrigation" in lowered_key:
+                change_parts.append(f"{feature_name} becomes {value}")
+            else:
+                change_parts.append(f"{feature_name} changes to {value}")
+        what_changed = (
+            "Imagine these field conditions changing: "
+            + ", ".join(change_parts)
+            + "."
+        )
+    else:
+        what_changed = (
+            "This checks what may happen to the crop shortlist if field conditions become different from the current situation."
+        )
+
+    if comparison.get("top_crop_changed"):
+        interpretation = (
+            f"Your first crop choice changes from {top_before} to {top_after}. This means the changed weather or water situation is strong enough to affect the main recommendation."
+        )
+    else:
+        interpretation = (
+            f"Your first crop choice stays {top_after}. This means the shortlist is mostly stable even after the weather or water change."
+        )
+
+    crop_change_parts = []
+    if largest_score_shift.get("crop"):
+        crop_name = pretty(str(largest_score_shift.get("crop", "")))
+        delta = round(float(largest_score_shift.get("score_delta", 0.0)) * 100.0, 2)
+        if delta > 0:
+            crop_change_parts.append(
+                f"{crop_name} looks a little stronger under this situation and shows the biggest improvement in the shortlist."
+            )
+        else:
+            crop_change_parts.append(
+                f"{crop_name} looks weaker under this situation and shows the biggest drop in the shortlist."
+            )
+    if largest_rank_shift.get("crop"):
+        rank_crop = pretty(str(largest_rank_shift.get("crop", "")))
+        rank_change = int(largest_rank_shift.get("rank_change", 0))
+        if rank_change > 0:
+            crop_change_parts.append(f"{rank_crop} moves up in the shortlist.")
+        elif rank_change < 0:
+            crop_change_parts.append(f"{rank_crop} moves down in the shortlist.")
+    if not crop_change_parts:
+        crop_change_parts.append(
+            "The shortlist changes only a little, so no crop becomes clearly better or clearly worse than the others."
+        )
+
+    if comparison.get("top_crop_changed"):
+        next_step = (
+            "This is a useful warning sign. Before deciding, check whether the farm really matches this changed condition, especially water availability, heat stress, and sowing time."
+        )
+    else:
+        next_step = (
+            "This is mainly a stability check. The top crop still holds, but you should still compare the first two or three crops before final planting."
+        )
+
+    strength_note = {
+        "Strong": "The impact is strong, so the changed condition matters clearly.",
+        "Moderate": "The impact is moderate, so the shortlist shifts but not completely.",
+        "Small": "The impact is small, so the recommendation is fairly steady.",
+    }.get(effect_strength, f"The impact looks {effect_strength.lower()} for this scenario.")
+
+    sections = [
+        ("What changed on the farm", what_changed),
+        ("What this means for crop choice", f"{interpretation} {strength_note}"),
+        ("Which crops look stronger or weaker", " ".join(crop_change_parts)),
+        ("What to check before final decision", next_step),
+    ]
+    for heading, content in sections:
+        st.markdown(
+            f"""
+            <div class="guide-card">
+                <div class="section-title">{html.escape(heading)}</div>
+                <div class="small-note">{html.escape(content)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def render_scenario_metrics_view(explanation_response: dict[str, Any]) -> None:
+    scenario_result = explanation_response.get("scenario_result", {})
+    comparison = scenario_result.get("comparison", {})
+    prediction = scenario_result.get("prediction", {})
+    base_prediction = explanation_response.get("base_prediction", {})
+    scenario_adjustment = scenario_result.get("scenario_adjustment", {})
+    rule_shift = scenario_result.get("rule_shift", {})
+
+    base_confidence = float(base_prediction.get("confidence", 0.0) or 0.0) * 100.0
+    scenario_confidence = float(prediction.get("confidence", 0.0) or 0.0) * 100.0
+    metric_rows = [
+        {"Metric": "Top crop before", "Value": pretty(str(comparison.get("top_crop_before", "")))},
+        {"Metric": "Top crop after", "Value": pretty(str(comparison.get("top_crop_after", "")))},
+        {"Metric": "Top crop changed", "Value": "Yes" if comparison.get("top_crop_changed") else "No"},
+        {"Metric": "Effect strength", "Value": pretty(str(comparison.get("effect_strength", "small")))},
+        {"Metric": "Top score delta", "Value": f"{float(comparison.get('top_score_delta', 0.0)) * 100.0:+.2f} points"},
+        {"Metric": "Average absolute score delta", "Value": f"{float(comparison.get('average_abs_score_delta', 0.0)) * 100.0:.2f} points"},
+        {"Metric": "Distribution shift", "Value": f"{float(comparison.get('distribution_shift', 0.0)):.4f}"},
+        {"Metric": "Jensen-Shannon divergence", "Value": f"{float(comparison.get('js_divergence', 0.0)):.4f}"},
+        {"Metric": "Base confidence", "Value": f"{base_confidence:.1f}%"},
+        {"Metric": "Scenario confidence", "Value": f"{scenario_confidence:.1f}%"},
+        {"Metric": "Rule stress level", "Value": pretty(str(rule_shift.get("stress_level", "small")))},
+    ]
+    if rule_shift.get("top_crop_rule_delta") is not None:
+        metric_rows.append(
+            {
+                "Metric": "Top crop rule delta",
+                "Value": f"{float(rule_shift.get('top_crop_rule_delta', 0.0)) * 100.0:+.2f} points",
+            }
+        )
+    if scenario_adjustment.get("blend_weight") is not None:
+        metric_rows.append(
+            {
+                "Metric": "Rule blend weight",
+                "Value": f"{float(scenario_adjustment.get('blend_weight', 0.0)):.2f}",
+            }
+        )
+    st.dataframe(pd.DataFrame(metric_rows), width="stretch", hide_index=True)
+
+    rows = comparison.get("rows", [])[:5]
+    if rows:
+        st.caption("Top comparison rows")
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "Crop": pretty(str(row.get("crop", ""))),
+                        "Base score": round(float(row.get("base_score", 0.0)) * 100.0, 2),
+                        "Scenario score": round(float(row.get("scenario_score", 0.0)) * 100.0, 2),
+                        "Score delta": round(float(row.get("score_delta", 0.0)) * 100.0, 2),
+                        "Base rank": int(row.get("base_rank", 0)),
+                        "Scenario rank": int(row.get("scenario_rank", 0)),
+                        "Rank change": int(row.get("rank_change", 0)),
+                    }
+                    for row in rows
+                ]
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+
+
+def fetch_scenario_explanation(
+    base_payload: dict[str, Any],
+    scenario_name: str,
+) -> tuple[dict[str, Any] | None, str | None]:
+    request_payload = {
+        **base_payload,
+        "scenario_name": scenario_name,
+    }
+    return post_json("/scenario-explain", request_payload)
 
 
 def render_hero(
@@ -900,13 +1114,18 @@ def render_prediction(
         render_ai_guide(prediction, llm_support, payload, region, state)
 
 
-def render_simulation(simulation: dict[str, Any]) -> None:
+def render_simulation(
+    simulation: dict[str, Any],
+    base_payload: dict[str, Any],
+    llm_support: dict[str, Any],
+) -> None:
     scenario_results = simulation.get("scenario_results", {})
     if not scenario_results:
         st.info("No scenario output available.")
         return
 
     st.subheader("Scenario comparison")
+    explanation_cache = dict(st.session_state.get("scenario_explanation_cache", {}))
     base_prediction = simulation.get("base_prediction", {})
     base_top_choice = (base_prediction.get("recommendations") or [{}])[0]
     base_confidence = float(base_prediction.get("confidence", 0.0) or 0.0) * 100.0
@@ -1013,6 +1232,51 @@ def render_simulation(simulation: dict[str, Any]) -> None:
                 ]
             )
             st.dataframe(table, width="stretch", hide_index=True)
+        explanation_cache_key = scenario_explanation_cache_key(base_payload, scenario_name)
+        cached_explanation = explanation_cache.get(explanation_cache_key)
+        existing_explanation = None
+        if payload.get("scenario_explanation_ui") and payload.get("scenario_explanation"):
+            existing_explanation = {
+                "scenario_name": scenario_name,
+                "display_name": display_name,
+                "scenario_result": payload,
+            }
+
+        with st.expander(f"Explain scenario impact: {display_name}", expanded=False):
+            if llm_support.get("enabled"):
+                st.caption("This uses the Groq-backed scenario explanation module and falls back to a grounded rule-based explanation if needed.")
+            else:
+                st.caption("Groq is not configured in the UI metadata, so the app will use the grounded fallback explanation path.")
+
+            explanation_response = cached_explanation or existing_explanation
+            if explanation_response is None:
+                if st.button(
+                    "Generate scenario explanation",
+                    key=f"generate_scenario_explanation_{explanation_cache_key}",
+                    width="stretch",
+                ):
+                    with st.spinner(f"Generating explanation for {display_name}..."):
+                        explanation_response, error = fetch_scenario_explanation(base_payload, scenario_name)
+                    if error:
+                        st.error(f"Scenario explanation failed: {error}")
+                    elif explanation_response:
+                        explanation_cache[explanation_cache_key] = explanation_response
+                        st.session_state["scenario_explanation_cache"] = explanation_cache
+                else:
+                    st.caption("Generate a structured explanation for this scenario result.")
+            if explanation_response is not None:
+                view_mode = st.radio(
+                    "Explanation view",
+                    options=["Analysis", "Farmer view", "Metrics"],
+                    horizontal=True,
+                    key=f"scenario_explanation_view_{explanation_cache_key}",
+                )
+                if view_mode == "Analysis":
+                    render_scenario_explanation_content(explanation_response)
+                elif view_mode == "Farmer view":
+                    render_simple_scenario_explanation(explanation_response)
+                else:
+                    render_scenario_metrics_view(explanation_response)
 
 
 def render_feedback_form(region: str, state: str, prediction: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -1291,7 +1555,11 @@ def main() -> None:
 
     simulation = st.session_state.get("last_simulation")
     if simulation:
-        render_simulation(simulation)
+        render_simulation(
+            simulation,
+            st.session_state.get("last_payload", payload),
+            llm_support,
+        )
 
 
 if __name__ == "__main__":

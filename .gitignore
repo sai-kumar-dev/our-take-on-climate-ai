@@ -5,9 +5,17 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
 
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ipynb_checkpoints/
+.vscode/
+.idea/
 
 artifacts/
 reports/
@@ -21,3 +29,16 @@ data/processed/data_new_final_ml_dataset.csv
 .env.local
 .env.*
 !.env.example
+
+# OS-specific noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local report / presentation drafts at repo root
+/Abstract.txt
+/Keywords.txt
+/Section_*.txt
+/slide*.txt
+/[0-9].txt
+/[0-9][0-9].txt

@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
@@ -176,6 +177,48 @@ class InferenceServiceTests(unittest.TestCase):
         self.assertIn("average_abs_score_delta", comparison)
         self.assertIn("scenario_adjustment", low_rainfall_result)
         self.assertIn("rule_shift", low_rainfall_result)
+
+    def test_explain_scenario_returns_structured_explanation(self) -> None:
+        payload = {
+            "region": "Pune",
+            "features": {
+                "temp_avg": 29.0,
+                "rain_total": 35.0,
+                "humidity_avg": 70.0,
+                "max_temp": 34.0,
+                "max_temp_3d": 34.0,
+                "rain_lag_14": 30.0,
+                "pH": 6.7,
+                "N": 340.0,
+                "P": 18.0,
+                "K": 220.0,
+                "N_class": "medium",
+                "P_class": "medium",
+                "K_class": "medium",
+                "fertility_class": "medium",
+            },
+            "irrigation_index": 0.5,
+            "rotation_score": 0.6,
+        }
+        mocked_explanation = {
+            "scenario_summary": "Scenario summary.",
+            "environmental_change": "Environmental change.",
+            "crop_response_analysis": "Crop response.",
+            "ranking_changes": "Ranking change.",
+            "key_drivers": ["rainfall"],
+            "stability_assessment": "Stable.",
+            "confidence_note": "Grounded.",
+        }
+        with mock.patch(
+            "climate_pipeline.inference.generate_scenario_explanation",
+            return_value=mocked_explanation,
+        ):
+            result = self.service.explain_scenario(payload, scenario_name="low_rainfall")
+        self.assertEqual(result["scenario_name"], "low_rainfall")
+        self.assertIn("scenario_result", result)
+        self.assertIn("scenario_explanation", result["scenario_result"])
+        self.assertEqual(result["scenario_result"]["scenario_explanation"]["scenario_summary"], "Scenario summary.")
+        self.assertIn("scenario_explanation_ui", result["scenario_result"])
 
     def test_catalog_exposes_model_coverage(self) -> None:
         catalog = self.service.get_catalog()

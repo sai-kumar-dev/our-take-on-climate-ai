@@ -20,6 +20,7 @@ from .training import (
     jensen_shannon_divergence,
     module_available,
 )
+from .scenario_explainer import format_for_ui, generate_scenario_explanation
 from .context_providers import build_default_context_provider
 from .runtime_context import month_to_season
 from .utils import ensure_parent_dir, resolve_path
@@ -238,6 +239,7 @@ class CropSuitabilityInferenceService:
         payload: dict[str, Any],
         scenario_names: list[str] | None = None,
         top_n: int = 3,
+        include_explanations: bool = False,
     ) -> dict[str, Any]:
         prepared = self.prepare_input(payload)
         base_probabilities = self._predict_probabilities(prepared.frame)
@@ -254,6 +256,10 @@ class CropSuitabilityInferenceService:
             localized_context=prepared.localized_context,
         )
         base_rule_distribution = self._rule_based_distribution(prepared.frame)
+        base_ranking_payload = self._build_ranking_payload_for_scenario_explainer(
+            probabilities=base_probabilities,
+            top_n=max(5, int(top_n)),
+        )
 
         selected_names = scenario_names or list(PRESET_SCENARIOS.keys())
         scenario_results: dict[str, Any] = {}
@@ -290,7 +296,7 @@ class CropSuitabilityInferenceService:
                 localized_context=prepared.localized_context,
             )
             comparison = self._build_comparison_table(base_probabilities, scenario_probabilities)
-            scenario_results[scenario_name] = {
+            scenario_result = {
                 "display_name": scenario_cfg["display_name"],
                 "prediction": scenario_prediction,
                 "comparison": comparison,
@@ -306,6 +312,28 @@ class CropSuitabilityInferenceService:
                     scenario_cfg=scenario_cfg,
                 ),
             }
+            if include_explanations:
+                feature_changes = self._build_scenario_feature_change_payload(
+                    base_frame=prepared.frame,
+                    scenario_frame=scenario_frame,
+                    scenario_cfg=scenario_cfg,
+                )
+                scenario_ranking_payload = self._build_ranking_payload_for_scenario_explainer(
+                    probabilities=scenario_probabilities,
+                    top_n=max(5, int(top_n)),
+                )
+                explanation = generate_scenario_explanation(
+                    baseline=base_ranking_payload,
+                    scenario=scenario_ranking_payload,
+                    scenario_name=scenario_name,
+                    feature_changes=feature_changes,
+                )
+                scenario_result["feature_changes"] = feature_changes
+                scenario_result["scenario_explanation"] = explanation
+                scenario_result["scenario_explanation_ui"] = format_for_ui(
+                    {"scenario_name": scenario_name, **explanation}
+                )
+            scenario_results[scenario_name] = scenario_result
 
         return {
             "base_prediction": base_prediction,
@@ -314,6 +342,36 @@ class CropSuitabilityInferenceService:
                 {"name": name, "display_name": cfg["display_name"]}
                 for name, cfg in PRESET_SCENARIOS.items()
             ],
+            "model_version": self.model_version,
+        }
+
+    def explain_scenario(
+        self,
+        payload: dict[str, Any],
+        scenario_name: str,
+        top_n: int = 3,
+    ) -> dict[str, Any]:
+        normalized_name = str(scenario_name or "").strip()
+        if normalized_name not in PRESET_SCENARIOS:
+            raise InferenceValidationError(
+                f"Unknown scenario '{scenario_name}'. Supported scenarios: {sorted(PRESET_SCENARIOS)}"
+            )
+
+        simulation = self.simulate_scenarios(
+            payload=payload,
+            scenario_names=[normalized_name],
+            top_n=top_n,
+            include_explanations=True,
+        )
+        scenario_result = simulation.get("scenario_results", {}).get(normalized_name)
+        if not scenario_result:
+            raise InferenceValidationError(f"Unable to generate explanation for scenario '{scenario_name}'.")
+
+        return {
+            "scenario_name": normalized_name,
+            "display_name": scenario_result.get("display_name", PRESET_SCENARIOS[normalized_name]["display_name"]),
+            "base_prediction": simulation.get("base_prediction", {}),
+            "scenario_result": scenario_result,
             "model_version": self.model_version,
         }
 
@@ -768,6 +826,59 @@ class CropSuitabilityInferenceService:
                 }
             )
         return changes
+
+    def _build_scenario_feature_change_payload(
+        self,
+        base_frame: pd.DataFrame,
+        scenario_frame: pd.DataFrame,
+        scenario_cfg: dict[str, Any],
+    ) -> dict[str, str]:
+        feature_names = list(scenario_cfg.get("feature_multipliers", {}).keys()) + list(
+            scenario_cfg.get("feature_additions", {}).keys()
+        )
+        feature_changes: dict[str, str] = {}
+        for feature in dict.fromkeys(feature_names):
+            if feature not in base_frame.columns or feature not in scenario_frame.columns:
+                continue
+            base_value = float(pd.to_numeric(base_frame[feature], errors="coerce").iloc[0])
+            scenario_value = float(pd.to_numeric(scenario_frame[feature], errors="coerce").iloc[0])
+            if feature in scenario_cfg.get("feature_multipliers", {}):
+                multiplier = float(scenario_cfg["feature_multipliers"][feature])
+                percentage_change = (multiplier - 1.0) * 100.0
+                feature_changes[feature] = (
+                    f"{percentage_change:+.1f}% ({base_value:.3f} -> {scenario_value:.3f})"
+                )
+                continue
+            if feature in scenario_cfg.get("feature_additions", {}):
+                addition = float(scenario_cfg["feature_additions"][feature])
+                unit = " C" if "temp" in feature or "heat" in feature else ""
+                feature_changes[feature] = f"{addition:+.2f}{unit} ({base_value:.3f} -> {scenario_value:.3f})"
+                continue
+            feature_changes[feature] = f"{scenario_value - base_value:+.3f} ({base_value:.3f} -> {scenario_value:.3f})"
+        return feature_changes
+
+    def _build_ranking_payload_for_scenario_explainer(
+        self,
+        probabilities: np.ndarray,
+        top_n: int = 5,
+    ) -> dict[str, Any]:
+        ranked_indices = np.argsort(np.asarray(probabilities, dtype=float))[::-1][: max(1, int(top_n))]
+        ranking = [
+            crop_name_from_label(self.label_columns[int(index)]).replace("_", " ").title()
+            for index in ranked_indices
+        ]
+        scores = {
+            crop_name_from_label(self.label_columns[int(index)]).replace("_", " ").title(): round(
+                float(probabilities[int(index)]),
+                6,
+            )
+            for index in ranked_indices
+        }
+        return {
+            "top_crop": ranking[0] if ranking else "",
+            "ranking": ranking,
+            "scores": scores,
+        }
 
     def _blend_scenario_probabilities(
         self,
