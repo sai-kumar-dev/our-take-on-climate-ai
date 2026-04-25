@@ -53,12 +53,30 @@ class InferenceServiceTests(unittest.TestCase):
         )
         train_from_config(ROOT_DIR, config)
         cls.service = CropSuitabilityInferenceService.from_artifact_dir(cls.artifact_dir, root_dir=ROOT_DIR)
-        cls.dataset = pd.read_csv(ROOT_DIR / "data" / "processed" / "final_ml_dataset.csv")
+        cls.dataset = pd.read_csv(ROOT_DIR / "data" / "sample_dataset.csv", dtype={"target_month": "string"})
         cls.sample_row = cls.dataset.iloc[0].to_dict()
+        cls.sample_region = str(cls.sample_row["region"])
+        cls.sample_state = str(cls.sample_row["state"])
+        cls.sample_time = str(cls.sample_row["time"])
+        cls.sample_month = str(cls.sample_row["target_month"]).zfill(2)
+
+    def build_reference_payload(self) -> dict[str, object]:
+        return {
+            "region": self.sample_region,
+            "state": self.sample_state,
+            "target_time": self.sample_time,
+            "irrigation_index": float(self.sample_row["irrigation_index"]),
+            "rotation_score": float(self.sample_row["rotation_score"]),
+            "features": {
+                feature: self.sample_row[feature]
+                for feature in self.service.numeric_features + self.service.categorical_features
+                if feature in self.sample_row
+            },
+        }
 
     def test_valid_input_returns_ranked_probabilities(self) -> None:
         payload = {
-            "region": "Mysuru",
+            "region": self.sample_region,
             "features": {
                 feature: self.sample_row[feature]
                 for feature in self.service.numeric_features + self.service.categorical_features
@@ -76,7 +94,9 @@ class InferenceServiceTests(unittest.TestCase):
 
     def test_missing_input_is_filled_with_warnings(self) -> None:
         payload = {
-            "region": "Pune",
+            "region": self.sample_region,
+            "state": self.sample_state,
+            "target_time": self.sample_time,
             "features": {
                 "temp_avg": 30.0,
                 "rain_total": 42.0,
@@ -90,7 +110,9 @@ class InferenceServiceTests(unittest.TestCase):
 
     def test_extreme_values_are_clipped(self) -> None:
         payload = {
-            "region": "Pune",
+            "region": self.sample_region,
+            "state": self.sample_state,
+            "target_time": self.sample_time,
             "features": {
                 "temp_avg": 120.0,
                 "rain_total": 99999.0,
@@ -113,7 +135,9 @@ class InferenceServiceTests(unittest.TestCase):
 
     def test_physical_bounds_are_enforced_for_real_world_features(self) -> None:
         payload = {
-            "region": "Pune",
+            "region": self.sample_region,
+            "state": self.sample_state,
+            "target_time": self.sample_time,
             "features": {
                 "temp_avg": 30.0,
                 "rain_total": -25.0,
@@ -139,27 +163,7 @@ class InferenceServiceTests(unittest.TestCase):
         self.assertGreaterEqual(float(row["K"]), 0.0)
 
     def test_scenario_simulation_returns_comparison_rows(self) -> None:
-        payload = {
-            "region": "Pune",
-            "features": {
-                "temp_avg": 29.0,
-                "rain_total": 35.0,
-                "humidity_avg": 70.0,
-                "max_temp": 34.0,
-                "max_temp_3d": 34.0,
-                "rain_lag_14": 30.0,
-                "pH": 6.7,
-                "N": 340.0,
-                "P": 18.0,
-                "K": 220.0,
-                "N_class": "medium",
-                "P_class": "medium",
-                "K_class": "medium",
-                "fertility_class": "medium",
-            },
-            "irrigation_index": 0.5,
-            "rotation_score": 0.6,
-        }
+        payload = self.build_reference_payload()
         result = self.service.simulate_scenarios(payload, scenario_names=["low_rainfall"])
         self.assertIn("base_prediction", result)
         self.assertIn("scenario_results", result)
@@ -179,27 +183,7 @@ class InferenceServiceTests(unittest.TestCase):
         self.assertIn("rule_shift", low_rainfall_result)
 
     def test_explain_scenario_returns_structured_explanation(self) -> None:
-        payload = {
-            "region": "Pune",
-            "features": {
-                "temp_avg": 29.0,
-                "rain_total": 35.0,
-                "humidity_avg": 70.0,
-                "max_temp": 34.0,
-                "max_temp_3d": 34.0,
-                "rain_lag_14": 30.0,
-                "pH": 6.7,
-                "N": 340.0,
-                "P": 18.0,
-                "K": 220.0,
-                "N_class": "medium",
-                "P_class": "medium",
-                "K_class": "medium",
-                "fertility_class": "medium",
-            },
-            "irrigation_index": 0.5,
-            "rotation_score": 0.6,
-        }
+        payload = self.build_reference_payload()
         mocked_explanation = {
             "scenario_summary": "Scenario summary.",
             "environmental_change": "Environmental change.",
@@ -232,21 +216,21 @@ class InferenceServiceTests(unittest.TestCase):
 
     def test_localized_context_returns_region_month_defaults(self) -> None:
         context = self.service.get_localized_context(
-            region="Pune",
-            state="Maharashtra",
-            target_time="2024-06",
+            region=self.sample_region,
+            state=self.sample_state,
+            target_time=self.sample_time,
         )
         self.assertTrue(context["available"])
-        self.assertEqual(context["resolved_region"], "Pune")
-        self.assertEqual(context["target_month"], "06")
+        self.assertEqual(context["resolved_region"], self.sample_region)
+        self.assertEqual(context["target_month"], self.sample_month)
         self.assertIn("rain_total", context["feature_defaults"])
         self.assertIn("temp_avg", context["validation_bands"])
 
     def test_partial_input_uses_localized_autofill(self) -> None:
         payload = {
-            "region": "Pune",
-            "state": "Maharashtra",
-            "target_time": "2024-06",
+            "region": self.sample_region,
+            "state": self.sample_state,
+            "target_time": self.sample_time,
             "features": {
                 "temp_avg": 29.0,
                 "rain_total": 35.0,
@@ -265,7 +249,7 @@ class InferenceServiceTests(unittest.TestCase):
         self.assertTrue(result["recommendations"])
         self.assertGreater(result["input_quality"]["context_autofill_count"], 0)
         self.assertIn("localized_context", result)
-        self.assertEqual(result["localized_context"]["target_month"], "06")
+        self.assertEqual(result["localized_context"]["target_month"], self.sample_month)
 
     def test_zero_padded_target_month_is_accepted(self) -> None:
         self.assertEqual(self.service._normalize_categorical_value("target_month", "06"), "6")

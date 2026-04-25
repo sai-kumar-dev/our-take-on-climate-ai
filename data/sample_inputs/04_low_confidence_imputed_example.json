@@ -1,0 +1,32 @@
+{
+  "region": "Anantapur",
+  "state": "Andhra Pradesh",
+  "target_time": "2018-07",
+  "irrigation_index": 0.85,
+  "rotation_score": 0.7739,
+  "features": {
+    "temp_avg": 27.722580645161297,
+    "rain_total": 1.330401647,
+    "humidity_avg": 62.50225806451613,
+    "rain_variance": 0.026609659860795,
+    "max_temp": 28.82,
+    "max_temp_3d": 28.776666666666667,
+    "max_rain_1d": 0.820759306,
+    "dry_spell_days": 31,
+    "temp_lag_7": 27.55033333333333,
+    "rain_lag_14": 31.835369269,
+    "pH": 6.766666666666667,
+    "N": 337.3,
+    "P": 18.49,
+    "K": 196.13,
+    "soil_health_index": 73.39,
+    "N_class": "medium",
+    "P_class": "medium",
+    "K_class": "medium",
+    "fertility_class": "medium",
+    "state_context": "andhra pradesh",
+    "region_context": "andhra pradesh__anantapur",
+    "target_month": "07",
+    "target_season": "kharif"
+  }
+}

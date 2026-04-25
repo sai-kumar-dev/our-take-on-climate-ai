@@ -1,0 +1,727 @@
+manifest_version: 1
+release_tag: "v1.0.0-public-artifact"
+artifact_name: "Climate-Aware Crop Recommendation System Public Artifact"
+artifact_type: "demo artifact"
+dataset_version: "1.0.0"
+built_at_utc: "2026-04-25T11:28:15.568629+00:00"
+git_commit: "95c189c8f4384d65896963a5ac4025b6d84cf6b9"
+builder_script: "scripts/build_public_data_package.py"
+public_release_boundary:
+  summary: "Representative reproducibility subset with a documented reconstruction pathway."
+  scope_note: "No extra anchor rows were added for release v1.0.0-public-artifact. The existing 211-row subset already covers all states, all state-season groups, all dominant crops, and all target columns while remaining explicitly partial for regions and months."
+  licensing_notice: "This representative subset is provided for reproducibility demonstration. Users should consult original upstream sources for full source licensing."
+dataset:
+  path: "data/sample_dataset.csv"
+  row_count: 211
+  column_count: 75
+  identifier_column_count: 4
+  feature_column_count: 25
+  quality_column_count: 5
+  target_column_count: 41
+  states:
+    count: 26
+    values:
+      - "Andaman And Nicobar"
+      - "Andhra Pradesh"
+      - "Arunachal Pradesh"
+      - "Assam"
+      - "Bihar"
+      - "Chhattisgarh"
+      - "Goa"
+      - "Gujarat"
+      - "Haryana"
+      - "Himachal Pradesh"
+      - "Jammu And Kashmir"
+      - "Karnataka"
+      - "Kerala"
+      - "Madhya Pradesh"
+      - "Maharashtra"
+      - "Manipur"
+      - "Meghalaya"
+      - "Mizoram"
+      - "Nagaland"
+      - "Puducherry"
+      - "Punjab"
+      - "Rajasthan"
+      - "Tamil Nadu"
+      - "Tripura"
+      - "Uttarakhand"
+      - "West Bengal"
+  districts:
+    count: 133
+    values:
+      - "24 Paraganas North"
+      - "24 Paraganas South"
+      - "Ahmedabad"
+      - "Aizawl"
+      - "Ajmer"
+      - "Alappuzha"
+      - "Alipurduar"
+      - "Alirajpur"
+      - "Ambala"
+      - "Amreli"
+      - "Amritsar"
+      - "Anantapur"
+      - "Anjaw"
+      - "Araria"
+      - "Ariyalur"
+      - "Aurangabad"
+      - "Bageshwar"
+      - "Balaghat"
+      - "Barnala"
+      - "Bengaluru Urban"
+      - "Bhopal"
+      - "Bidar"
+      - "Bijapur"
+      - "Bilaspur"
+      - "Birbhum"
+      - "Bishnupur"
+      - "Biswanath"
+      - "Bongaigaon"
+      - "Chamarajanagara"
+      - "Chamoli"
+      - "Chandel"
+      - "Chengalpattu"
+      - "Chennai"
+      - "Chhatarpur"
+      - "Chikkamagaluru"
+      - "Dakshina Kannada"
+      - "Damoh"
+      - "Dang"
+      - "Dantewada"
+      - "Davangere"
+      - "Dehradun"
+      - "Dhalai"
+      - "Dharmapuri"
+      - "Dibang Valley"
+      - "Dibrugarh"
+      - "Dimapur"
+      - "Durg"
+      - "East Garo Hills"
+      - "East Jaintia Hills"
+      - "East Khasi Hills"
+      - "Ernakulam"
+      - "Gadchiroli"
+      - "Gomati"
+      - "Hamirpur"
+      - "Hoshangabad"
+      - "Idukki"
+      - "Imphal East"
+      - "Jammu"
+      - "Jhalawar"
+      - "Kangra"
+      - "Kanniyakumari"
+      - "Kannur"
+      - "Karaikal"
+      - "Karauli"
+      - "Karbi Anglong"
+      - "Karnal"
+      - "Katihar"
+      - "Khargone"
+      - "Kheda"
+      - "Khowai"
+      - "Kiphire"
+      - "Kishtwar"
+      - "Kodagu"
+      - "Kolasib"
+      - "Kollam"
+      - "Kondagaon"
+      - "Korba"
+      - "Kota"
+      - "Kottayam"
+      - "Lawngtlai"
+      - "Longleng"
+      - "Lower Dibang Valley"
+      - "Mahasamund"
+      - "Mahe"
+      - "Mahendragarh"
+      - "Mandla"
+      - "Mokokchung"
+      - "Munger"
+      - "Nagapattinam"
+      - "Nainital"
+      - "Narayanpur"
+      - "Nicobars"
+      - "North Goa"
+      - "Palakkad"
+      - "Panchkula"
+      - "Pathankot"
+      - "Patiala"
+      - "Prakasam"
+      - "Pratapgarh"
+      - "Purba Medinipur"
+      - "Raigarh"
+      - "Rajnandgaon"
+      - "Ratnagiri"
+      - "Saharsa"
+      - "Saiha"
+      - "Samba"
+      - "Satara"
+      - "Senapati"
+      - "Serchhip"
+      - "Sheohar"
+      - "Sindhudurg"
+      - "Sirmaur"
+      - "South Garo Hills"
+      - "South Goa"
+      - "South West Garo Hills"
+      - "South West Khasi Hills"
+      - "Spsr Nellore"
+      - "Tawang"
+      - "Tenkasi"
+      - "Thane"
+      - "Thiruvallur"
+      - "Thoubal"
+      - "Udham Singh Nagar"
+      - "Udupi"
+      - "Una"
+      - "Unakoti"
+      - "Upper Siang"
+      - "Vaishali"
+      - "Valsad"
+      - "Visakhapatnam"
+      - "Vizianagaram"
+      - "West Jaintia Hills"
+      - "Zunheboto"
+  months_covered:
+    count: 44
+    values:
+      - "2018-07"
+      - "2018-08"
+      - "2018-09"
+      - "2018-11"
+      - "2018-12"
+      - "2019-01"
+      - "2019-02"
+      - "2019-03"
+      - "2019-04"
+      - "2019-05"
+      - "2019-06"
+      - "2019-07"
+      - "2019-08"
+      - "2019-09"
+      - "2019-10"
+      - "2019-11"
+      - "2019-12"
+      - "2020-01"
+      - "2020-03"
+      - "2020-04"
+      - "2020-05"
+      - "2020-06"
+      - "2020-07"
+      - "2020-08"
+      - "2020-09"
+      - "2020-10"
+      - "2020-11"
+      - "2021-03"
+      - "2021-04"
+      - "2021-05"
+      - "2021-06"
+      - "2021-07"
+      - "2021-09"
+      - "2021-10"
+      - "2021-11"
+      - "2021-12"
+      - "2022-01"
+      - "2022-02"
+      - "2022-04"
+      - "2022-05"
+      - "2022-06"
+      - "2022-07"
+      - "2022-08"
+      - "2022-11"
+  time_span:
+    min: "2018-07"
+    max: "2022-11"
+  crop_coverage:
+    dominant_crops:
+      count: 23
+      of_full_dataset: 23
+      values:
+        - "arcanut processed"
+        - "arecanut"
+        - "banana"
+        - "black pepper"
+        - "cashewnut"
+        - "castor seed"
+        - "coconut"
+        - "coriander"
+        - "cotton lint"
+        - "dry chillies"
+        - "garlic"
+        - "ginger"
+        - "guar seed"
+        - "jowar"
+        - "onion"
+        - "potato"
+        - "sesamum"
+        - "sugarcane"
+        - "sunflower"
+        - "sweet potato"
+        - "tapioca"
+        - "tobacco"
+        - "turmeric"
+    positive_target_columns:
+      count: 41
+      of_full_dataset: 41
+      values:
+        - "arcanut processed"
+        - "arecanut"
+        - "arhar tur"
+        - "banana"
+        - "black pepper"
+        - "cardamom"
+        - "cashewnut"
+        - "castor seed"
+        - "coconut"
+        - "cond spcs other"
+        - "coriander"
+        - "cotton lint"
+        - "dry chillies"
+        - "dry ginger"
+        - "garlic"
+        - "ginger"
+        - "gram"
+        - "groundnut"
+        - "guar seed"
+        - "jowar"
+        - "maize"
+        - "mango"
+        - "mesta"
+        - "onion"
+        - "other fresh fruits"
+        - "other oilseeds"
+        - "other vegetables"
+        - "pineapple"
+        - "potato"
+        - "ragi"
+        - "rapeseed and mustard"
+        - "sannhamp"
+        - "sesamum"
+        - "small millets"
+        - "sugarcane"
+        - "sunflower"
+        - "sweet potato"
+        - "tapioca"
+        - "tobacco"
+        - "turmeric"
+        - "wheat"
+  coverage_summary:
+    states:
+      sample_count: 26
+      full_count: 26
+      fraction: "26/26"
+      note: "All states present in the full final table appear in the released subset."
+    state_season_groups:
+      sample_count: 78
+      full_count: 78
+      fraction: "78/78"
+      note: "State-season coverage is complete even though district and month coverage are partial."
+    regions:
+      sample_count: 133
+      full_count: 480
+      fraction: "133/480"
+      note: "Region coverage is intentionally partial. The subset is a demo artifact, not a national district release."
+    months:
+      sample_count: 44
+      full_count: 54
+      fraction: "44/54"
+      note: "Month coverage is intentionally partial and should not be described as a complete temporal reconstruction."
+      missing_from_sample:
+        - "2018-10"
+        - "2020-02"
+        - "2020-12"
+        - "2021-01"
+        - "2021-02"
+        - "2021-08"
+        - "2022-03"
+        - "2022-09"
+        - "2022-10"
+        - "2022-12"
+    dominant_crops:
+      sample_count: 23
+      full_count: 23
+      fraction: "23/23"
+      note: "Counts crops that appear as the row-wise top target at least once."
+      values:
+        - "arcanut processed"
+        - "arecanut"
+        - "banana"
+        - "black pepper"
+        - "cashewnut"
+        - "castor seed"
+        - "coconut"
+        - "coriander"
+        - "cotton lint"
+        - "dry chillies"
+        - "garlic"
+        - "ginger"
+        - "guar seed"
+        - "jowar"
+        - "onion"
+        - "potato"
+        - "sesamum"
+        - "sugarcane"
+        - "sunflower"
+        - "sweet potato"
+        - "tapioca"
+        - "tobacco"
+        - "turmeric"
+    positive_target_columns:
+      sample_count: 41
+      full_count: 41
+      fraction: "41/41"
+      note: "Counts target columns that are positive at least once, regardless of whether they are ever dominant."
+      values:
+        - "arcanut processed"
+        - "arecanut"
+        - "arhar tur"
+        - "banana"
+        - "black pepper"
+        - "cardamom"
+        - "cashewnut"
+        - "castor seed"
+        - "coconut"
+        - "cond spcs other"
+        - "coriander"
+        - "cotton lint"
+        - "dry chillies"
+        - "dry ginger"
+        - "garlic"
+        - "ginger"
+        - "gram"
+        - "groundnut"
+        - "guar seed"
+        - "jowar"
+        - "maize"
+        - "mango"
+        - "mesta"
+        - "onion"
+        - "other fresh fruits"
+        - "other oilseeds"
+        - "other vegetables"
+        - "pineapple"
+        - "potato"
+        - "ragi"
+        - "rapeseed and mustard"
+        - "sannhamp"
+        - "sesamum"
+        - "small millets"
+        - "sugarcane"
+        - "sunflower"
+        - "sweet potato"
+        - "tapioca"
+        - "tobacco"
+        - "turmeric"
+        - "wheat"
+  quality_variation:
+    target_seasons_present:
+      - "kharif"
+      - "rabi"
+      - "zaid"
+    soil_imputed_values:
+      - 0
+      - 1
+    climate_gap_filled_values:
+      - 0
+    time_step_missing_values:
+      - 0
+    geo_confidence_range:
+      min: 1.0
+      max: 1.0
+    data_confidence_range:
+      min: 0.9375
+      max: 1.0
+    note: "Observed quality variation in the released subset is limited. Rows include both soil-imputed and non-imputed cases, but do not include positive time_step_missing or climate_gap_filled examples."
+checksums:
+  algorithm: "SHA-256"
+  scope: "All release files except MANIFEST.yaml and CHECKSUMS.txt."
+  files:
+    -
+      path: ".dockerignore"
+      sha256: "25ba4d3054dcc784befbb42bf91d2f016ff74f456cb59a5a3573e827936fc201"
+      bytes: 64
+    -
+      path: ".env.example"
+      sha256: "dc96f7f5baed66fc31ecb77ff296f5425acbad3494064196e816a8347e84a160"
+      bytes: 591
+    -
+      path: ".github/workflows/ci.yml"
+      sha256: "5b810a02e10dcc2556c516e816a444212cdc593b1b253eb73294116f70a3c8bf"
+      bytes: 792
+    -
+      path: ".gitignore"
+      sha256: "539f9e926986bd93ff18b8de36aac1ffa31851f3cb139ea859dd5f22cb0c9e95"
+      bytes: 556
+    -
+      path: ".streamlit/config.toml"
+      sha256: "41cbfe486ed60f831e5a1e2113df13478c7384defb7cec69074c239cef3dad63"
+      bytes: 155
+    -
+      path: "CITATION.cff"
+      sha256: "d046fa76cda2cb205bafb203ae81c9a48faba5dde371024a07d5574ea9e8c736"
+      bytes: 853
+    -
+      path: "Dockerfile"
+      sha256: "af74ba3a2177945697d8d677a677cf97c6e024b4025fea195390e1da8652ea51"
+      bytes: 300
+    -
+      path: "LICENSE"
+      sha256: "d75c57d8c11e3cd3d96ef4e064963894d53fe53d2fa9e8a0d81cc613a8a6c977"
+      bytes: 10250
+    -
+      path: "NOTICE"
+      sha256: "8944d5266c05e9e6913b0f3cd49f008ea220a29770a60daef446cb09ee5721e2"
+      bytes: 456
+    -
+      path: "PROJECT_GUIDE.md"
+      sha256: "84ae17c2bab06fe7a8c475a2292cae90ee54e96de765997407c79f688c71d83e"
+      bytes: 27146
+    -
+      path: "README.md"
+      sha256: "d70a4a3fac3f848b0f06ef8ac4d6538d70e4893001f95729c058feb13292cc0b"
+      bytes: 9138
+    -
+      path: "app.py"
+      sha256: "0f4cf5d962efb3defff975733a46d18f14f536c08a22a94e6b067bd215652709"
+      bytes: 115
+    -
+      path: "app_ui.py"
+      sha256: "0796257a4bc164459b160632283c45dde93c64d7e5cd9592f3d2099f33f72603"
+      bytes: 111
+    -
+      path: "configs/data_new_config.json"
+      sha256: "46628b90fe1c4c13a8ba82090bd4e14f65b094d21aaeb985c7b9f0c87a6075b5"
+      bytes: 1529
+    -
+      path: "configs/demo_config.json"
+      sha256: "e569fbba0012119dc3c0a6b2df96dfb380040b7bb273422b4f21b8affb3ef098"
+      bytes: 1521
+    -
+      path: "configs/pipeline_config.example.json"
+      sha256: "cd2ab6f070ebbd30b5009f0c3acf410fb6372cbde31f08bdc22df49225d839d0"
+      bytes: 1696
+    -
+      path: "configs/training_config.example.json"
+      sha256: "6b71052fcafc1061083ada72a830727f822012ee86490bc4d4bdd34640eaf02b"
+      bytes: 2231
+    -
+      path: "configs/training_config.json"
+      sha256: "f63a7d1afe0684e7cb78f7f974da88bb272b22e8cdc3545fcf0b8caa58ef59c1"
+      bytes: 1283
+    -
+      path: "configs/training_data_new.json"
+      sha256: "91fd921dd72cb73143bb8a3e4eff9ebeaa657dc9f1bdd701b2e85717280b60b5"
+      bytes: 2428
+    -
+      path: "configs/training_demo.json"
+      sha256: "f63a7d1afe0684e7cb78f7f974da88bb272b22e8cdc3545fcf0b8caa58ef59c1"
+      bytes: 1283
+    -
+      path: "data/DATASET_CITATION.txt"
+      sha256: "bcbfb154b2663ae7c454ce3fe90f2dbfc716172cfc23270c197370124a70b2b8"
+      bytes: 1105
+    -
+      path: "data/DATA_CARD.md"
+      sha256: "b75cb421812a6bc3af470e8f5e9db2b684cf160743b2857e9ac297b0881cab04"
+      bytes: 4838
+    -
+      path: "data/NOTICE_DATA_SUBSET.md"
+      sha256: "b6bd0687363f63dada4040c40303c98c138eadef3b74f74c2c26448a7a5f508e"
+      bytes: 1123
+    -
+      path: "data/README.md"
+      sha256: "a97bed5a99f22f3f20e998a767c4722a3420efdad06a28a597c0b6775face6c3"
+      bytes: 4869
+    -
+      path: "data/RECONSTRUCTION_GUIDE.md"
+      sha256: "b05bbfd3e7a096b83aacb1998d9105cb64721eaef69f850e51074b09c5ac1a3d"
+      bytes: 3993
+    -
+      path: "data/SOURCE_PROVENANCE.md"
+      sha256: "e21c63b0168e7ec6d81bd6d30717e477e61b6742bf798b7e5a2b6556ea196c21"
+      bytes: 7436
+    -
+      path: "data/data_dictionary.csv"
+      sha256: "75d08469d8b459a22fa58c88ff11c43fbf499e5d76ffab0e2ae66faff47ff389"
+      bytes: 18976
+    -
+      path: "data/sample_dataset.csv"
+      sha256: "007caacd687aec4e665844e2672334fe9a208a585facdd206838bc31fae5eaa5"
+      bytes: 113235
+    -
+      path: "data/sample_dataset_schema.json"
+      sha256: "8a43f867b5329c7f53f9dfe3dc5aae69ae848e7252d6b0e90d372b8bf63f6ee1"
+      bytes: 47557
+    -
+      path: "data/sample_inputs/01_high_rainfall_kharif.json"
+      sha256: "a719e2cecbe3c4027a933a5c64b17489eb34d77d869d1c3d3403bde6f0f0a0f0"
+      bytes: 891
+    -
+      path: "data/sample_inputs/02_high_heat_example.json"
+      sha256: "7e1dd16b356c84fcfaefbecf3e9a8042d0d63d3a8f8b077c9e9bb091fa00c587"
+      bytes: 819
+    -
+      path: "data/sample_inputs/03_high_soil_health_example.json"
+      sha256: "b28a86410936ac0825263527d732febba382cfc18476ecb97b13d8a8f50fff02"
+      bytes: 823
+    -
+      path: "data/sample_inputs/04_low_confidence_imputed_example.json"
+      sha256: "fc3948a82ccbc585de677a7914d83f531ca6c38b5b2f3b4dfeb92dd14a0e982b"
+      bytes: 894
+    -
+      path: "data/sample_inputs/05_high_irrigation_example.json"
+      sha256: "ebd9999bd9cc2b9b12e5ec85f302bd4a6174c7db10b119a4982949aa95013e12"
+      bytes: 820
+    -
+      path: "dataset_version.json"
+      sha256: "5b848f4856e78418780de45e1eae2b4be344cbfcad77d53858019e7aa0b278cd"
+      bytes: 5069
+    -
+      path: "docker-compose.yml"
+      sha256: "bbcd78624abfa699e97328f7a645a841346c1a838669388cc4a8d965c91cfd97"
+      bytes: 564
+    -
+      path: "docs/ARCHITECTURE.md"
+      sha256: "13cb70ff74d759afaa5ff2303c8d0367d52e71f71f122314a155a19600e810a4"
+      bytes: 1213
+    -
+      path: "docs/MODEL_GOVERNANCE.md"
+      sha256: "8c4df1515aad301f0031125fc10d6ee9aef47bf09ad620bf38436e381bdb6613"
+      bytes: 798
+    -
+      path: "docs/TARGET_REDESIGN.md"
+      sha256: "8ec687704912a7fc9d7946842da72e1c169acfd64a6263a4464116b9879d10f2"
+      bytes: 861
+    -
+      path: "requirements.txt"
+      sha256: "3f24d86f92a2c75142a2502b3094b34e0b6f01435626dea7b8ddb85b9a1be9e8"
+      bytes: 193
+    -
+      path: "run_all.bat"
+      sha256: "9fc086f4a79a5f975a965b3eec698e5f13aed4f397ab79d2bf0cfbf1243df824"
+      bytes: 11831
+    -
+      path: "run_all_evaluations.py"
+      sha256: "3957d59e036e35961a9cd2df6df0d6ff41196033764b1d9ded8c32c4c3212ec6"
+      bytes: 1778
+    -
+      path: "run_pipeline.py"
+      sha256: "05b23a78fa2916a4b1c4bb99f74b7154dd718935a7d7e844d0e83a5f30df6087"
+      bytes: 745
+    -
+      path: "scripts/build_public_data_package.py"
+      sha256: "c03460108e4747f337a1909a5db31432c02df5ae81ceefcae43b8c42ebd8f9f6"
+      bytes: 45382
+    -
+      path: "src/__init__.py"
+      sha256: "5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f"
+      bytes: 35
+    -
+      path: "src/app_api_entry.py"
+      sha256: "a2e12f1d6f43a62dfcd2b9f78766f4b95496e6836df249a6c54ef3543a41a72e"
+      bytes: 24535
+    -
+      path: "src/climate_pipeline/__init__.py"
+      sha256: "6cc890f3e0b26459b893c27bdb9caeb81f49853ce106beb1f07c711d5ce1e0cc"
+      bytes: 645
+    -
+      path: "src/climate_pipeline/context_providers.py"
+      sha256: "3f71ea556eac5fc69b2958142901c3306f8c3020a7714fb8ff143c9410622724"
+      bytes: 6336
+    -
+      path: "src/climate_pipeline/evaluation.py"
+      sha256: "34242977b1c43ae93b78a135794bd42438dcb7b7cbaf4e1e09882fea8bd14452"
+      bytes: 39262
+    -
+      path: "src/climate_pipeline/experiment_tracking.py"
+      sha256: "62c2d2e94f1c0e078a7d2d5d0c8fb3fc2dce7301b9b1fb25370d6b75562ed79c"
+      bytes: 7344
+    -
+      path: "src/climate_pipeline/feedback.py"
+      sha256: "e6998901cb87587be9ee98ae8b69d87b1ab574162a9adf77abd953fdc198cc3a"
+      bytes: 5651
+    -
+      path: "src/climate_pipeline/inference.py"
+      sha256: "6dcce681b6c7cc417ed4eb547c6f6415c93d84c85cd6b4bfc7b4023ce3fb509b"
+      bytes: 65993
+    -
+      path: "src/climate_pipeline/inspection.py"
+      sha256: "7d946645817cd68a6fcc329551a54ebed7549a16f7664228c74ff42df17e1104"
+      bytes: 2672
+    -
+      path: "src/climate_pipeline/llm_guide.py"
+      sha256: "5de0dc3e667204479aa96ce09ea999cd5dc736a9717bfefdf12b30e41461a24d"
+      bytes: 10716
+    -
+      path: "src/climate_pipeline/pipeline.py"
+      sha256: "9f17e6c9ced8352d360ea4dd00ff6975fbfe980136f89d10a23c8c08f475ada1"
+      bytes: 3514
+    -
+      path: "src/climate_pipeline/runtime_context.py"
+      sha256: "0591bb35d07aae6e0a448243916f98d2e03c7acd71f36266d1538e8667fa386d"
+      bytes: 19692
+    -
+      path: "src/climate_pipeline/scenario_explainer.py"
+      sha256: "b7e0e4d5048801ad7f0e0f8b54ab8772a5194b25d691147f4c2ea8c1b210de3e"
+      bytes: 39920
+    -
+      path: "src/climate_pipeline/training.py"
+      sha256: "0e14a2623e21f0c1af17a49f55aea3637be92958cbbbee3f3f05142a9236b730"
+      bytes: 88588
+    -
+      path: "src/climate_pipeline/transforms.py"
+      sha256: "52490be72a83bb6d6c4be27b307bc5c03a7737964aee3bc6c7706758548049ca"
+      bytes: 48064
+    -
+      path: "src/climate_pipeline/utils.py"
+      sha256: "e589e4137c1a2cfeca6032bc7cfaed4ec178fc2095c87ef32a7c427c6781d95e"
+      bytes: 4472
+    -
+      path: "src/env_loader.py"
+      sha256: "ae0f2c37aff1145a5be59981e13e8b1dbbacee28e46a615c38025ebb370a96e9"
+      bytes: 1425
+    -
+      path: "src/process_launcher.py"
+      sha256: "06bb8b6ba37a19fc96a54fa4ca9171feeb30cf29ea8af6989a0a5a5794c5a1c9"
+      bytes: 2178
+    -
+      path: "src/project_doctor.py"
+      sha256: "710b52bc9d72b13382dafd39fb0aabaefeb5ea753059782e5e339b4feb680560"
+      bytes: 4570
+    -
+      path: "src/ui_app_source.py"
+      sha256: "777ce22440d14521906b00715da8e9ff1478681c5fffd65df040e1334c61722d"
+      bytes: 64397
+    -
+      path: "tests/test_api.py"
+      sha256: "a87a96a95ef8275784f06674a073db3a312714689243405689607c025a473708"
+      bytes: 18672
+    -
+      path: "tests/test_env_loader.py"
+      sha256: "6548608e44845e261e2e134cf3493e010dccea4facb5496eb064028c6620cf73"
+      bytes: 2594
+    -
+      path: "tests/test_inference.py"
+      sha256: "3c65ae63bf6c23d269ec94b224bed6538f51d843d06e0d4b3e8d419a15076c58"
+      bytes: 11347
+    -
+      path: "tests/test_llm_guide.py"
+      sha256: "398545e45faf9b2b82fc9b3ec672bcffecc58a2a485f32c9556c7d46b877d6fb"
+      bytes: 3860
+    -
+      path: "tests/test_pipeline_orchestration.py"
+      sha256: "d17f86ecdfb5c86b7c3694a302fcb72c892761b33b3a7edd466e59fa3f7a4a61"
+      bytes: 5620
+    -
+      path: "tests/test_training_pipeline.py"
+      sha256: "7718eb5a8d6f0b95e56a0ad35f3e9bad1e34d9577d9c4bbbe9782db62cf92e7f"
+      bytes: 6473
+    -
+      path: "tests/test_ui_llm_formatting.py"
+      sha256: "133d9317ddcecd31c19c67a7c2016b1c79afae7983e862233324cecdd3a9e35e"
+      bytes: 1956
+    -
+      path: "train_model.py"
+      sha256: "903668efa38a62aba7b6d68f8b2a62ea9abec9f82aee761ee8c32c6d255a663c"
+      bytes: 846

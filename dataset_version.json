@@ -1,0 +1,170 @@
+{
+  "dataset_name": "Representative Reproducibility Subset",
+  "version": "1.0.0",
+  "release_tag": "v1.0.0-public-artifact",
+  "artifact_type": "demo artifact",
+  "built_at_utc": "2026-04-25T11:28:15.391135+00:00",
+  "git_commit": "95c189c8f4384d65896963a5ac4025b6d84cf6b9",
+  "builder_script": "scripts/build_public_data_package.py",
+  "row_count": 211,
+  "column_count": 75,
+  "identifier_column_count": 4,
+  "feature_column_count": 25,
+  "quality_column_count": 5,
+  "target_column_count": 41,
+  "state_count": 26,
+  "district_count": 133,
+  "month_count": 44,
+  "time_min": "2018-07",
+  "time_max": "2022-11",
+  "sample_dataset_path": "data/sample_dataset.csv",
+  "sample_dataset_sha256": "007caacd687aec4e665844e2672334fe9a208a585facdd206838bc31fae5eaa5",
+  "schema_path": "data/sample_dataset_schema.json",
+  "schema_sha256": "8a43f867b5329c7f53f9dfe3dc5aae69ae848e7252d6b0e90d372b8bf63f6ee1",
+  "coverage_summary": {
+    "states": {
+      "sample_count": 26,
+      "full_count": 26,
+      "fraction": "26/26",
+      "note": "All states present in the full final table appear in the released subset."
+    },
+    "state_season_groups": {
+      "sample_count": 78,
+      "full_count": 78,
+      "fraction": "78/78",
+      "note": "State-season coverage is complete even though district and month coverage are partial."
+    },
+    "regions": {
+      "sample_count": 133,
+      "full_count": 480,
+      "fraction": "133/480",
+      "note": "Region coverage is intentionally partial. The subset is a demo artifact, not a national district release."
+    },
+    "months": {
+      "sample_count": 44,
+      "full_count": 54,
+      "fraction": "44/54",
+      "note": "Month coverage is intentionally partial and should not be described as a complete temporal reconstruction.",
+      "missing_from_sample": [
+        "2018-10",
+        "2020-02",
+        "2020-12",
+        "2021-01",
+        "2021-02",
+        "2021-08",
+        "2022-03",
+        "2022-09",
+        "2022-10",
+        "2022-12"
+      ]
+    },
+    "dominant_crops": {
+      "sample_count": 23,
+      "full_count": 23,
+      "fraction": "23/23",
+      "note": "Counts crops that appear as the row-wise top target at least once.",
+      "values": [
+        "arcanut processed",
+        "arecanut",
+        "banana",
+        "black pepper",
+        "cashewnut",
+        "castor seed",
+        "coconut",
+        "coriander",
+        "cotton lint",
+        "dry chillies",
+        "garlic",
+        "ginger",
+        "guar seed",
+        "jowar",
+        "onion",
+        "potato",
+        "sesamum",
+        "sugarcane",
+        "sunflower",
+        "sweet potato",
+        "tapioca",
+        "tobacco",
+        "turmeric"
+      ]
+    },
+    "positive_target_columns": {
+      "sample_count": 41,
+      "full_count": 41,
+      "fraction": "41/41",
+      "note": "Counts target columns that are positive at least once, regardless of whether they are ever dominant.",
+      "values": [
+        "arcanut processed",
+        "arecanut",
+        "arhar tur",
+        "banana",
+        "black pepper",
+        "cardamom",
+        "cashewnut",
+        "castor seed",
+        "coconut",
+        "cond spcs other",
+        "coriander",
+        "cotton lint",
+        "dry chillies",
+        "dry ginger",
+        "garlic",
+        "ginger",
+        "gram",
+        "groundnut",
+        "guar seed",
+        "jowar",
+        "maize",
+        "mango",
+        "mesta",
+        "onion",
+        "other fresh fruits",
+        "other oilseeds",
+        "other vegetables",
+        "pineapple",
+        "potato",
+        "ragi",
+        "rapeseed and mustard",
+        "sannhamp",
+        "sesamum",
+        "small millets",
+        "sugarcane",
+        "sunflower",
+        "sweet potato",
+        "tapioca",
+        "tobacco",
+        "turmeric",
+        "wheat"
+      ]
+    }
+  },
+  "quality_variation": {
+    "target_seasons_present": [
+      "kharif",
+      "rabi",
+      "zaid"
+    ],
+    "soil_imputed_values": [
+      0,
+      1
+    ],
+    "climate_gap_filled_values": [
+      0
+    ],
+    "time_step_missing_values": [
+      0
+    ],
+    "geo_confidence_range": {
+      "min": 1.0,
+      "max": 1.0
+    },
+    "data_confidence_range": {
+      "min": 0.9375,
+      "max": 1.0
+    },
+    "note": "Observed quality variation in the released subset is limited. Rows include both soil-imputed and non-imputed cases, but do not include positive time_step_missing or climate_gap_filled examples."
+  },
+  "scope_decision": "No extra anchor rows were added for release v1.0.0-public-artifact. The existing 211-row subset already covers all states, all state-season groups, all dominant crops, and all target columns while remaining explicitly partial for regions and months.",
+  "licensing_notice": "This representative subset is provided for reproducibility demonstration. Users should consult original upstream sources for full source licensing."
+}

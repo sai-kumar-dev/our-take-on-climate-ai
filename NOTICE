@@ -1,0 +1,10 @@
+Climate-Aware Crop Recommendation System
+Copyright 2026 Sai Kumar Garlapati
+
+This repository includes original code and repository-authored documentation
+released under the Apache License, Version 2.0. See LICENSE.
+
+The public data artifact under data/ is not relicensed as Apache-2.0 upstream
+source data. It is a derived representative reproducibility subset with a
+separate notice boundary. See data/NOTICE_DATA_SUBSET.md and
+data/SOURCE_PROVENANCE.md.

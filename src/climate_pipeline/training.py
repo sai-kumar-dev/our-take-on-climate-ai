@@ -55,7 +55,7 @@ DEFAULT_TRAINING_CONFIG: dict[str, Any] = {
     "mode": "production",
     "sanity_mode": "strict",
     "data": {
-        "dataset_path": "data/processed/final_ml_dataset.csv",
+        "dataset_path": "data/sample_dataset.csv",
         "time_column": "time",
         "region_column": "region_key",
         "sample_weight_column": "data_confidence",

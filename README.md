@@ -4,25 +4,88 @@
 [![XGBoost](https://img.shields.io/badge/XGBoost-Ranking%20Model-E76F51)](requirements.txt)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white)](src/app_api_entry.py)
 [![Streamlit](https://img.shields.io/badge/Streamlit-Frontend-FF4B4B?logo=streamlit&logoColor=white)](src/ui_app_source.py)
-[![SHAP](https://img.shields.io/badge/SHAP-Explainability-6C5CE7)](artifacts/evaluation/shap)
+[![SHAP](https://img.shields.io/badge/SHAP-Explainability-6C5CE7)](src/climate_pipeline/evaluation.py)
 [![Groq](https://img.shields.io/badge/Groq-LLM%20Explanations-111111)](src/climate_pipeline/scenario_explainer.py)
 
-This repository implements a climate-aware crop recommendation platform that combines district-level climate, soil, and crop-pattern data into a multi-output machine learning ranking system.
+This repository contains a climate-aware crop recommendation platform for district-level ranking under climate and soil variability.
 
-The project is designed as an end-to-end stack: a configurable data pipeline, an XGBoost-based ranking model, reproducible evaluation artifacts, a FastAPI serving layer, a Streamlit user interface, SHAP-based interpretability, and Groq-powered explanation modules for both farmer-facing guidance and scenario analysis.
+The public release `v1.0.0-public-artifact` ships:
 
-For a deeper engineering walkthrough, see [PROJECT_GUIDE.md](PROJECT_GUIDE.md).
+- application code
+- training and evaluation support files
+- a representative reproducibility subset under `data/`
+- release fixity files: `MANIFEST.yaml`, `dataset_version.json`, and `CHECKSUMS.txt`
+
+The public release does not ship the full raw upstream source bundle or the full 24,120-row processed training table. Instead, it provides a demo artifact plus a documented reconstruction pathway in [data/RECONSTRUCTION_GUIDE.md](data/RECONSTRUCTION_GUIDE.md).
+
+For a fast repository map, see [docs/REPO_GUIDE.md](docs/REPO_GUIDE.md). For a deeper engineering walkthrough, see [PROJECT_GUIDE.md](PROJECT_GUIDE.md).
+
+## Start Here
+
+1. Read the project overview in [System Overview](#2-system-overview) and the engineering walkthrough in [PROJECT_GUIDE.md](PROJECT_GUIDE.md).
+2. Run the minimal local setup in [Quickstart](#quickstart) to launch the API and UI.
+3. Explore the public artifact in [data/](data/), starting with [data/README.md](data/README.md), [data/DATA_CARD.md](data/DATA_CARD.md), and [data/sample_dataset.csv](data/sample_dataset.csv).
+4. Review reproducibility boundaries in [data/RECONSTRUCTION_GUIDE.md](data/RECONSTRUCTION_GUIDE.md) and [data/SOURCE_PROVENANCE.md](data/SOURCE_PROVENANCE.md).
+5. Verify release-facing metadata in [CITATION.cff](CITATION.cff), [MANIFEST.yaml](MANIFEST.yaml), [dataset_version.json](dataset_version.json), and [CHECKSUMS.txt](CHECKSUMS.txt).
+6. Generate or inspect local evaluation outputs under `artifacts/evaluation/` using `python run_all_evaluations.py --artifact-dir artifacts/data_new_training`.
+
+## Quickstart
+
+Minimal local setup:
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+# Linux / macOS: source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app:app --reload
+streamlit run app_ui.py
+```
+
+Windows shortcut:
+
+```bash
+run_all.bat start
+```
+
+## Repository Navigation
+
+- Source code: [src/](src)
+- Public data artifact: [data/](data) and [data/README.md](data/README.md)
+- Reconstruction docs: [data/RECONSTRUCTION_GUIDE.md](data/RECONSTRUCTION_GUIDE.md)
+- Provenance and citation guidance: [data/SOURCE_PROVENANCE.md](data/SOURCE_PROVENANCE.md) and [data/DATASET_CITATION.txt](data/DATASET_CITATION.txt)
+- Architecture and governance notes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MODEL_GOVERNANCE.md](docs/MODEL_GOVERNANCE.md), and [docs/TARGET_REDESIGN.md](docs/TARGET_REDESIGN.md)
+- Engineering walkthrough: [PROJECT_GUIDE.md](PROJECT_GUIDE.md)
+- Tests: [tests/](tests)
+- Release metadata: [CITATION.cff](CITATION.cff), [MANIFEST.yaml](MANIFEST.yaml), [dataset_version.json](dataset_version.json), and [CHECKSUMS.txt](CHECKSUMS.txt)
+- Evaluation outputs: local `artifacts/evaluation/` after running `python run_all_evaluations.py --artifact-dir artifacts/data_new_training`
+- Repository map: [docs/REPO_GUIDE.md](docs/REPO_GUIDE.md)
+
+## Table Of Contents
+
+- [Start Here](#start-here)
+- [Quickstart](#quickstart)
+- [Repository Navigation](#repository-navigation)
+- [Features](#1-features)
+- [System Overview](#2-system-overview)
+- [Project Structure](#3-project-structure)
+- [Installation](#4-installation)
+- [Running The Project](#5-running-the-project)
+- [Evaluation](#6-evaluation)
+- [Public Data Artifact](#7-public-data-artifact)
+- [Reproducibility](#8-reproducibility)
+- [Example API Payload](#9-example-api-payload)
+- [License And Citation](#10-license-and-citation)
 
 ## 1. Features
 
-- Multi-source data integration from climate, soil, and crop-distribution tables
-- District-level crop guidance with localized context lookup
-- Multi-output ranking model that predicts a crop suitability distribution instead of a single hard label
+- Multi-source integration across climate, soil, and crop-distribution inputs
+- District-level ranking instead of a single hard crop label
 - Scenario simulation for rainfall, heat, and irrigation stress testing
-- SHAP explainability for both global and local model interpretation
-- Groq LLM explanation engine for scenario analysis and user-facing guidance
-- Full-stack application with FastAPI backend and Streamlit frontend
-- Versioned artifacts, model registry entries, model cards, and run manifests for reproducibility
+- SHAP-based model explanation support
+- Groq-backed structured explanation modules
+- FastAPI backend and Streamlit frontend
+- Release-hardened public artifact package with provenance, citation, and fixity metadata
 
 ## 2. System Overview
 
@@ -44,78 +107,60 @@ Scenario Simulation + Groq Explanation Modules
 Structured Response for UI and Evaluation Artifacts
 ```
 
-At runtime, the UI collects region, month, and field-level inputs. The API resolves localized historical context, validates and clips inputs, generates a ranked crop shortlist, and can then run what-if scenario simulations plus structured explanations.
+At runtime, the UI collects region, month, and field-level inputs. The API resolves localized historical context, validates and clips inputs, generates a ranked crop shortlist, and can run what-if scenario simulations plus structured explanations.
 
 ## 3. Project Structure
 
 ```text
 .
-├── app.py
-├── app_ui.py
-├── run_pipeline.py
-├── train_model.py
-├── run_all_evaluations.py
-├── run_all.bat
-├── requirements.txt
-├── .env.example
-├── configs/
-│   ├── data_new_config.json
-│   └── training_data_new.json
-├── data/
-│   ├── raw/
-│   │   ├── data_new/
-│   │   └── demo/
-│   └── processed/
-│       ├── data_new_final_ml_dataset.csv
-│       └── final_ml_dataset.csv
-├── artifacts/
-│   ├── data_new_training/
-│   ├── demo_training/
-│   ├── evaluation/
-│   ├── feedback_store/
-│   └── registry/
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── MODEL_GOVERNANCE.md
-│   └── TARGET_REDESIGN.md
-├── logs/
-├── src/
-│   ├── app_api_entry.py
-│   ├── ui_app_source.py
-│   ├── env_loader.py
-│   └── climate_pipeline/
-│       ├── pipeline.py
-│       ├── transforms.py
-│       ├── training.py
-│       ├── inference.py
-│       ├── evaluation.py
-│       ├── scenario_explainer.py
-│       ├── llm_guide.py
-│       ├── context_providers.py
-│       ├── feedback.py
-│       └── experiment_tracking.py
-└── tests/
+|-- app.py
+|-- app_ui.py
+|-- run_pipeline.py
+|-- train_model.py
+|-- run_all_evaluations.py
+|-- run_all.bat
+|-- requirements.txt
+|-- CHECKSUMS.txt
+|-- MANIFEST.yaml
+|-- dataset_version.json
+|-- CITATION.cff
+|-- NOTICE
+|-- data/
+|   |-- sample_dataset.csv
+|   |-- data_dictionary.csv
+|   |-- sample_dataset_schema.json
+|   |-- DATA_CARD.md
+|   |-- SOURCE_PROVENANCE.md
+|   |-- RECONSTRUCTION_GUIDE.md
+|   |-- NOTICE_DATA_SUBSET.md
+|   |-- DATASET_CITATION.txt
+|   `-- sample_inputs/
+|-- artifacts/
+|-- configs/
+|-- docs/
+|-- scripts/
+|-- src/
+`-- tests/
 ```
 
-Major directories:
+Public release boundary:
 
-- `configs/`: declarative pipeline and training configuration
-- `data/`: raw source tables and processed ML-ready datasets
-- `artifacts/`: trained models, registries, evaluation outputs, and feedback storage
-- `src/climate_pipeline/`: core ML, inference, evaluation, and explanation code
-- `src/app_api_entry.py`: FastAPI application entrypoint
-- `src/ui_app_source.py`: Streamlit frontend implementation
-- `docs/`: supplementary architecture and governance notes
-- `tests/`: unit and integration tests
+- `data/` is the shipped dataset artifact for this release.
+- The subset is a representative reproducibility subset and demo artifact.
+- The subset alone is not the full processed training table and should not be described as complete empirical reproducibility.
+- Local `data/processed/` outputs remain build products and are outside the public release boundary.
+- `artifacts/` is a generated local output directory used for training and evaluation runs; it is not versioned in git by default.
 
-Note: there is no separate `frontend/` directory in this repo. The frontend entrypoint is `app_ui.py`, which wraps `src/ui_app_source.py`.
+Structure note:
+
+- Root-level entrypoints such as `app.py`, `app_ui.py`, `run_pipeline.py`, `train_model.py`, and `run_all_evaluations.py` are intentionally kept at the repository root for discoverable CLI use.
+- Reviewer-facing tracked materials are concentrated in `README.md`, `data/`, `docs/`, and the root release metadata files.
 
 ## 4. Installation
 
-Clone the repository and install dependencies:
+Create a virtual environment in a local checkout:
 
 ```bash
-git clone <repository-url>
 cd our_take_on_climate_ai
 python -m venv .venv
 ```
@@ -130,13 +175,13 @@ Activate the virtual environment:
 source .venv/bin/activate
 ```
 
-Install requirements:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Create a local environment file:
+Optional local environment file:
 
 ```bash
 copy .env.example .env
@@ -144,33 +189,33 @@ copy .env.example .env
 
 Useful `.env` variables:
 
-- `GROQ_API_KEY`: enables Groq-powered explanation features
-- `GROQ_MODEL`: selects the Groq model used by explanation modules
-- `MODEL_ARTIFACT_DIR`: overrides the default trained artifact directory
-- `FEEDBACK_SIGNING_SECRET`: signs stored feedback records
-- `API_BASE_URL`: points the frontend to a non-default API address
+- `GROQ_API_KEY`
+- `GROQ_MODEL`
+- `MODEL_ARTIFACT_DIR`
+- `FEEDBACK_SIGNING_SECRET`
+- `API_BASE_URL`
 
-## 5. Running the Project
+## 5. Running The Project
 
-Run the backend:
+Backend:
 
 ```bash
 uvicorn app:app --reload
 ```
 
-Run the frontend:
+Frontend:
 
 ```bash
 streamlit run app_ui.py
 ```
 
-Recommended Windows shortcut:
+Windows helper:
 
 ```bash
 run_all.bat start
 ```
 
-Other useful helper commands:
+Other helpers:
 
 ```bash
 run_all.bat status
@@ -180,44 +225,89 @@ run_all.bat doctor
 run_all.bat stop
 ```
 
-Important note:
+## 6. Evaluation
 
-- `app.py` is the FastAPI wrapper entrypoint
-- `app_ui.py` is the Streamlit wrapper entrypoint
-
-## 6. Running Evaluation
-
-Run the full evaluation stack against the production-style training artifact:
+Reference evaluation for the production-style artifact bundle:
 
 ```bash
 python run_all_evaluations.py --artifact-dir artifacts/data_new_training
 ```
 
-The evaluation runner resolves the saved model, reconstructs the held-out temporal split from artifact metadata, and writes outputs to:
+Outputs are written under local `artifacts/evaluation/`, including metrics tables, scenario analyses, SHAP plots, and summary reports.
 
-```text
-artifacts/evaluation/
-├── performance/
-├── stability/
-├── scenario/
-├── shap/
-├── tables/
-└── summaries/
+Reference metrics currently stored in `artifacts/evaluation/summaries/report_summary.md` report:
+
+- Top-1 Accuracy: `0.828808`
+- Top-3 Accuracy: `0.964178`
+- Macro F1: `0.631731`
+- NDCG: `0.950921`
+
+## 7. Public Data Artifact
+
+The shipped dataset is `data/sample_dataset.csv`. It is a representative reproducibility subset of the final ML-ready table and is intended for:
+
+- artifact review
+- schema inspection
+- demo requests
+- tests and examples
+- fixity verification
+
+It is not intended to imply that the full raw data or full processed training data ships in the repository.
+
+### Coverage Summary
+
+| Metric | Released subset | Full final table | Meaning |
+| --- | ---: | ---: | --- |
+| States | `26` | `26` | All states in the full table are represented. |
+| State-season groups | `78` | `78` | All `state x season` groups are represented. |
+| Regions | `133` | `480` | Region coverage is intentionally partial. |
+| Months covered | `44` | `54` | Month coverage is intentionally partial. |
+| Dominant crops | `23` | `23` | All crops that are top-ranked anywhere in the full table appear as dominant at least once. |
+| Target columns positive at least once | `41` | `41` | Every `crop_prob_*` target has at least one positive exemplar. |
+
+### Coverage Interpretation
+
+- `41/41` target-column coverage means every target column is positive at least once. It does not mean every crop is dominant somewhere.
+- `23/23` dominant-crop coverage is the stricter argmax-style coverage metric and is separate from target-column positivity.
+- `133/480` region coverage and `44/54` month coverage are explicitly partial and should be described that way.
+- Quality variation in the released subset is limited: `soil_imputed` includes both `0` and `1`, `data_confidence` ranges from `0.9375` to `1.0`, while `climate_gap_filled` and `time_step_missing` are only `0` in the public subset.
+
+### Scope Decision
+
+No extra anchor rows were added for `v1.0.0-public-artifact`. The current 211-row subset already covers all states, all state-season groups, all dominant crops, and all target columns while remaining clearly bounded as a partial demo artifact.
+
+## 8. Reproducibility
+
+Reproducibility is split into two layers.
+
+Public artifact reproducibility:
+
+- verify file integrity with `CHECKSUMS.txt`
+- inspect release metadata in `MANIFEST.yaml` and `dataset_version.json`
+- use `data/sample_dataset.csv`, `data/sample_dataset_schema.json`, and `data/sample_inputs/` for schema-faithful demos and tests
+
+Documented reconstruction pathway:
+
+- [data/RECONSTRUCTION_GUIDE.md](data/RECONSTRUCTION_GUIDE.md) explains how to acquire upstream sources and rebuild the full final-table interface locally
+- the public subset alone does not recreate the full 24,120-row training table or all empirical metrics
+- if the prepared upstream interface tables are available locally under `data/raw/data_new/`, run:
+
+```bash
+python run_pipeline.py --config configs/data_new_config.json
+python train_model.py --config configs/training_data_new.json
+python run_all_evaluations.py --artifact-dir artifacts/data_new_training
 ```
 
-Generated outputs include:
+Test suite:
 
-- `metrics.json` and `metrics.csv`
-- performance and class-wise charts
-- perturbation stability metrics
-- scenario comparison outputs
-- `scenario_explanations.json` and `scenario_explanations.md`
-- SHAP summary, bar, and force plots
-- `report_summary.md` and `final_metrics_table.csv`
+```bash
+python -m unittest tests.test_api
+python -m unittest tests.test_inference
+python -m unittest tests.test_training_pipeline
+python -m unittest tests.test_pipeline_orchestration
+```
 
-## 7. Example Input / Output
-
-Example `/predict` request:
+## 9. Example API Payload
 
 ```json
 {
@@ -248,167 +338,16 @@ Example `/predict` request:
 }
 ```
 
-Example `/predict` response structure:
+## 10. License And Citation
 
-```json
-{
-  "status": "ok",
-  "request_id": "8c1d...",
-  "prediction_time_ms": 84.2,
-  "recommendations": [
-    {"crop": "sugarcane", "score": 0.62},
-    {"crop": "coconut", "score": 0.19},
-    {"crop": "banana", "score": 0.09}
-  ],
-  "confidence": 0.81,
-  "confidence_breakdown": {
-    "data_confidence": 0.92,
-    "geo_confidence": 0.88,
-    "rule_model_agreement": 0.71
-  },
-  "explanation": "Higher soil pH and irrigation support favored sugarcane over coconut.",
-  "top_features": [
-    {
-      "feature": "soil pH",
-      "feature_key": "pH",
-      "impact": 0.0831,
-      "direction": "supports",
-      "descriptor": "high soil pH"
-    }
-  ],
-  "why_not": [
-    {
-      "crop": "coconut",
-      "score_gap": 0.043,
-      "reason": "Coconut ranks below sugarcane under the current conditions."
-    }
-  ],
-  "warnings": [],
-  "model_version": "model_v1_..."
-}
-```
+Code and original repository-authored documentation are released under [LICENSE](LICENSE) with the Apache-2.0 terms.
 
-## 8. Results
+Repository notice file: [NOTICE](NOTICE)
 
-Reference evaluation currently stored in `artifacts/evaluation/summaries/report_summary.md` and generated from the local artifact bundle on April 14, 2026 reports:
+The data subset under `data/` has a separate provenance boundary:
 
-- Top-1 Accuracy: `0.828808`
-- Top-3 Accuracy: `0.964178`
-- Macro F1: `0.631731`
-- NDCG: `0.950921`
-- Top-1 perturbation consistency under `+-3%` noise: `0.934766`
-- Top-3 perturbation consistency under `+-3%` noise: `0.815611`
+- read [data/NOTICE_DATA_SUBSET.md](data/NOTICE_DATA_SUBSET.md)
+- read [data/SOURCE_PROVENANCE.md](data/SOURCE_PROVENANCE.md)
+- read [data/DATASET_CITATION.txt](data/DATASET_CITATION.txt)
 
-Observed scenario behavior on the held-out split:
-
-- `low_rainfall`: mean JS divergence `0.000634`, top-1 change rate `0.015837`
-- `high_temperature`: mean JS divergence `0.000666`, top-1 change rate `0.006787`
-- `increased_irrigation`: mean JS divergence `0.001577`, top-1 change rate `0.016214`
-
-SHAP summary from the saved evaluation highlights `pH`, `K`, `state_context`, and `N` among the strongest contributors for the dominant explained crop in the reference run.
-
-## 9. Scenario Explanation With Groq
-
-The project includes two Groq-backed explanation paths:
-
-- `src/climate_pipeline/llm_guide.py`: conversational, farmer-oriented explanation for predictions
-- `src/climate_pipeline/scenario_explainer.py`: structured scenario impact analysis for baseline vs. modified rankings
-
-Why this matters:
-
-- raw ranking shifts are useful for engineers but hard to interpret for end users
-- scenario explanations connect feature changes to crop movement using agronomic reasoning
-- UI users can switch between analytical, farmer-facing, and metrics views for each scenario run
-
-Structured scenario explanation format:
-
-```json
-{
-  "scenario_summary": "...",
-  "environmental_change": "...",
-  "crop_response_analysis": "...",
-  "ranking_changes": "...",
-  "key_drivers": ["rainfall", "soil_ph"],
-  "stability_assessment": "...",
-  "confidence_note": "..."
-}
-```
-
-Related API route:
-
-```bash
-POST /scenario-explain
-```
-
-## 10. Reproducibility
-
-Key inputs and outputs:
-
-- Raw source tables: `data/raw/data_new/`
-- Processed dataset: `data/processed/data_new_final_ml_dataset.csv`
-- Training config: `configs/training_data_new.json`
-- Pipeline config: `configs/data_new_config.json`
-- Primary trained artifact: `artifacts/data_new_training/`
-- Registry files: `artifacts/registry/model_registry.jsonl` and `artifacts/registry/training_runs.jsonl`
-
-To fully regenerate the project outputs:
-
-```bash
-python run_pipeline.py --config configs/data_new_config.json
-python train_model.py --config configs/training_data_new.json
-python run_all_evaluations.py --artifact-dir artifacts/data_new_training
-```
-
-To run the test suite:
-
-```bash
-python -m unittest tests.test_api
-python -m unittest tests.test_inference
-python -m unittest tests.test_training_pipeline
-python -m unittest tests.test_pipeline_orchestration
-```
-
-Reproducibility note:
-
-- use the same environment for training, inference, and evaluation
-- this repo pins `scikit-learn`, `xgboost`, `shap`, and `matplotlib` in `requirements.txt`
-- `run_all_evaluations.py` re-executes itself inside the repo-local `.venv` when available to reduce model/pickle version drift
-
-## 11. Tech Stack
-
-- Python
-- Pandas and NumPy
-- Scikit-learn preprocessing and utilities
-- XGBoost for multi-output ranking
-- FastAPI for the serving layer
-- Streamlit for the UI
-- SHAP for explainability
-- Groq for LLM-backed explanations
-- Matplotlib for evaluation visualizations
-
-## 12. Contributor Tips
-
-- Keep configs in `configs/` as the source of truth for pipeline and training behavior
-- Update tests when adding features, scenarios, or endpoint fields
-- Prefer writing outputs to `artifacts/` instead of ad hoc local folders
-- If you change model artifacts, rerun the evaluation pipeline and review the generated summaries
-
-## 13. Future Improvements
-
-- Integrate live weather features instead of relying only on historical same-month climatology
-- Add stronger causal or counterfactual scenario modeling
-- Expand multilingual farmer-facing guidance
-- Add monitoring for production drift and model promotion gates
-- Support additional ranking models and ensemble strategies
-
-## 14. License / Credits
-
-License:
-
-- This repository does not currently include a committed `LICENSE` file. Add one before public redistribution.
-
-Credits:
-
-- Built with XGBoost, FastAPI, Streamlit, SHAP, and Groq
-- Includes local architecture and governance support through `docs/ARCHITECTURE.md`, `docs/MODEL_GOVERNANCE.md`, and `docs/TARGET_REDESIGN.md`
-- Uses versioned artifacts, model cards, and registry files to support reproducible ML experimentation
+The Apache-2.0 code license does not grant broader rights in third-party upstream source data. If you use this repository, cite the project via [CITATION.cff](CITATION.cff) and cite upstream data sources separately.

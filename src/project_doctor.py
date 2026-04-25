@@ -41,8 +41,8 @@ def check_paths() -> tuple[list[CheckResult], bool, bool]:
     training_files = [
         ("Training config", ROOT_DIR / "configs" / "training_data_new.json"),
         ("Pipeline config", ROOT_DIR / "configs" / "data_new_config.json"),
-        ("Test dataset", ROOT_DIR / "data" / "processed" / "final_ml_dataset.csv"),
-        ("Training dataset", ROOT_DIR / "data" / "processed" / "data_new_final_ml_dataset.csv"),
+        ("Public sample dataset", ROOT_DIR / "data" / "sample_dataset.csv"),
+        ("Full training dataset", ROOT_DIR / "data" / "processed" / "data_new_final_ml_dataset.csv"),
     ]
     packaging_files = [
         ("Dockerfile", ROOT_DIR / "Dockerfile"),

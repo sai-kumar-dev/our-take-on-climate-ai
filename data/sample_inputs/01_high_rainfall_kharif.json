@@ -1,0 +1,32 @@
+{
+  "region": "South West Khasi Hills",
+  "state": "Meghalaya",
+  "target_time": "2021-06",
+  "irrigation_index": 0.208,
+  "rotation_score": 0.7274,
+  "features": {
+    "temp_avg": 22.906333333333336,
+    "rain_total": 1740.153051632,
+    "humidity_avg": 92.10866666666666,
+    "rain_variance": 9219.03373954448,
+    "max_temp": 24.02,
+    "max_temp_3d": 23.626666666666665,
+    "max_rain_1d": 433.5623236,
+    "dry_spell_days": 3,
+    "temp_lag_7": 21.474193548387092,
+    "rain_lag_14": 257.628007686,
+    "pH": 5.0,
+    "N": 670.3,
+    "P": 23.19,
+    "K": 192.7,
+    "soil_health_index": 75.4,
+    "N_class": "high",
+    "P_class": "medium",
+    "K_class": "medium",
+    "fertility_class": "medium",
+    "state_context": "meghalaya",
+    "region_context": "meghalaya__south west khasi hills",
+    "target_month": "06",
+    "target_season": "kharif"
+  }
+}

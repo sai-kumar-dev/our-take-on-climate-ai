@@ -1,0 +1,32 @@
+{
+  "region": "Panchkula",
+  "state": "Haryana",
+  "target_time": "2019-06",
+  "irrigation_index": 0.9277,
+  "rotation_score": 0.6913,
+  "features": {
+    "temp_avg": 35.08633333333333,
+    "rain_total": 0.0,
+    "humidity_avg": 30.287666666666663,
+    "rain_variance": 0.0,
+    "max_temp": 38.91,
+    "max_temp_3d": 37.97666666666667,
+    "max_rain_1d": 0.0,
+    "dry_spell_days": 30,
+    "temp_lag_7": 31.75032258064516,
+    "rain_lag_14": 0.0,
+    "pH": 7.0,
+    "N": 324.8,
+    "P": 18.1,
+    "K": 176.2,
+    "soil_health_index": 68.33,
+    "N_class": "medium",
+    "P_class": "medium",
+    "K_class": "medium",
+    "fertility_class": "medium",
+    "state_context": "haryana",
+    "region_context": "haryana__panchkula",
+    "target_month": "06",
+    "target_season": "kharif"
+  }
+}

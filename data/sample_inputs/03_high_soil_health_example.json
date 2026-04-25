@@ -1,0 +1,32 @@
+{
+  "region": "Nagapattinam",
+  "state": "Tamil Nadu",
+  "target_time": "2018-07",
+  "irrigation_index": 0.8176,
+  "rotation_score": 0.9474,
+  "features": {
+    "temp_avg": 29.77451612903226,
+    "rain_total": 0.0,
+    "humidity_avg": 71.67064516129032,
+    "rain_variance": 0.0,
+    "max_temp": 30.44,
+    "max_temp_3d": 30.30333333333333,
+    "max_rain_1d": 0.0,
+    "dry_spell_days": 31,
+    "temp_lag_7": 29.856,
+    "rain_lag_14": 0.0,
+    "pH": 6.6,
+    "N": 573.16,
+    "P": 23.91,
+    "K": 203.08,
+    "soil_health_index": 91.04,
+    "N_class": "high",
+    "P_class": "medium",
+    "K_class": "medium",
+    "fertility_class": "medium",
+    "state_context": "tamil nadu",
+    "region_context": "tamil nadu__nagapattinam",
+    "target_month": "07",
+    "target_season": "kharif"
+  }
+}

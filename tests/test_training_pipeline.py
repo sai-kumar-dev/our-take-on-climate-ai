@@ -30,7 +30,7 @@ class TrainingPipelineTests(unittest.TestCase):
             "mode": "demo",
             "sanity_mode": "warn",
             "data": {
-                "dataset_path": "data/processed/final_ml_dataset.csv",
+                "dataset_path": "data/sample_dataset.csv",
             },
             "model": {
                 "backend": "xgboost",
@@ -68,7 +68,7 @@ class TrainingPipelineTests(unittest.TestCase):
         logger = configure_logger(ROOT_DIR / "artifacts" / "test_logs")
         dataset = load_and_validate_dataset(ROOT_DIR, self.config, logger)
         self.assertGreater(len(dataset.label_columns), 0)
-        self.assertIn("crop_prob_rice", dataset.label_columns)
+        self.assertIn("crop_prob_coconut", dataset.label_columns)
         self.assertTrue(np.allclose(dataset.frame[dataset.label_columns].sum(axis=1).to_numpy(), 1.0))
 
     def test_time_split_is_ordered(self) -> None:

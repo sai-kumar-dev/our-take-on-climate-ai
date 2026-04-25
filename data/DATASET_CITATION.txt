@@ -1,0 +1,24 @@
+Recommended citation for the public data artifact:
+
+Sai Kumar Garlapati. Climate-Aware Crop Recommendation System: Representative Reproducibility Subset. Version v1.0.0-public-artifact. Released 2026-04-25.
+
+Scope note:
+
+This citation refers to the derived public subset and release metadata in this repository. It does not replace citations for the original upstream climate, soil, crop, or geocoding data sources.
+
+Required companion citation practice:
+
+1. Cite the repository or software artifact using `CITATION.cff`.
+2. Cite the upstream data sources listed in `SOURCE_PROVENANCE.md`.
+3. Keep the following release wording intact:
+
+   "This representative subset is provided for reproducibility demonstration. Users should consult original upstream sources for full source licensing."
+
+Suggested BibTeX entry:
+
+@misc{garlapati2026climateartifactdataset,
+  author = {Garlapati, Sai Kumar},
+  title = {Climate-Aware Crop Recommendation System: Representative Reproducibility Subset},
+  year = {2026},
+  note = {Version v1.0.0-public-artifact; derived public subset for reproducibility demonstration}
+}

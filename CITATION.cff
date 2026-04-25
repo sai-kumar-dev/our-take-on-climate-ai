@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this repository or its public artifact, cite the software artifact below and cite the upstream data sources listed in data/SOURCE_PROVENANCE.md."
+title: "Climate-Aware Crop Recommendation System"
+type: software
+version: "v1.0.0-public-artifact"
+date-released: 2026-04-25
+license: "Apache-2.0"
+repository-code: "https://github.com/sai-kumar-dev/our-take-on-climate-ai"
+url: "https://github.com/sai-kumar-dev/our-take-on-climate-ai"
+authors:
+  - family-names: "Garlapati"
+    given-names: "Sai Kumar"
+abstract: "Public release of a climate-aware crop recommendation system with a representative reproducibility subset, provenance notes, and a documented reconstruction pathway."
+keywords:
+  - "crop recommendation"
+  - "climate-aware machine learning"
+  - "reproducibility artifact"
+  - "xgboost"
+  - "agriculture"

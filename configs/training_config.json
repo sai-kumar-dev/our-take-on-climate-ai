@@ -2,7 +2,7 @@
   "mode": "demo",
   "sanity_mode": "warn",
   "data": {
-    "dataset_path": "data/processed/final_ml_dataset.csv"
+    "dataset_path": "data/sample_dataset.csv"
   },
   "split": {
     "test_periods": 1,

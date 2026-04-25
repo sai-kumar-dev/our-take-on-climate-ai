@@ -23,6 +23,7 @@ reports/
 data/raw/
 data_new/
 data/processed/data_new_final_ml_dataset.csv
+data/processed/final_ml_dataset.csv
 
 *.log
 .env
@@ -42,3 +43,5 @@ desktop.ini
 /slide*.txt
 /[0-9].txt
 /[0-9][0-9].txt
+/abbrevatiosn.csv
+/glossary.txt
