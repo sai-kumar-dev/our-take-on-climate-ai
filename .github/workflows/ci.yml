@@ -8,8 +8,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Install dependencies
@@ -21,4 +21,4 @@ jobs:
           python -m py_compile app.py app_ui.py train_model.py run_pipeline.py src/app_api_entry.py src/ui_app_source.py src/process_launcher.py src/project_doctor.py
       - name: Unit tests
         run: |
-          python -m unittest tests.test_api tests.test_inference tests.test_training_pipeline tests.test_pipeline_orchestration tests.test_env_loader tests.test_llm_guide tests.test_ui_llm_formatting
+          python -m unittest discover -s tests -p "test_*.py"

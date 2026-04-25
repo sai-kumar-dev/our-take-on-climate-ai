@@ -9,13 +9,14 @@ from src.climate_pipeline.utils import read_config
 
 
 ROOT_DIR = Path(__file__).resolve().parent
+DEFAULT_TRAINING_CONFIG_PATH = "configs/training_config.json"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Train the crop guidance model from a JSON config.")
     parser.add_argument(
         "--config",
-        default="configs/training_data_new.json",
+        default=DEFAULT_TRAINING_CONFIG_PATH,
         help="Path to the training config JSON.",
     )
     args = parser.parse_args()
